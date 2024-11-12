@@ -1,0 +1,45 @@
+<!-- activity_add_strain.xml -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <EditText
+        android:id="@+id/strainNameInput"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Strain Name" />
+
+    <EditText
+        android:id="@+id/strainTypeInput"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Type (indica, sativa, hybrid)" />
+
+    <EditText
+        android:id="@+id/effectsInput"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Effects (comma separated)" />
+
+    <EditText
+        android:id="@+id/flavorsInput"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Flavors (comma separated)" />
+
+    <EditText
+        android:id="@+id/ratingInput"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Rating (0.0 - 5.0)"
+        android:inputType="numberDecimal" />
+
+    <Button
+        android:id="@+id/saveStrainButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:text="Save Strain" />
+</LinearLayout>
