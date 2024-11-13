@@ -1,12 +1,15 @@
 // MainActivity.kt
+
 package com.example.flowr
-import android.widget.EditText  // Required for EditText
-import android.text.Editable
-import android.text.TextWatcher  // Required for TextWatcher
 import android.content.Intent
+
 import android.os.Bundle
+import android.text.Editable
+import android.text.TextWatcher
 import android.util.Log
 import android.widget.Button
+import android.widget.CheckBox
+import android.widget.EditText
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -36,7 +39,7 @@ class MainActivity : AppCompatActivity() {
         // Load strains from Firestore
         loadStrains()
 
-        // Set up the search bar (if applicable)
+        // Search functionality
         val searchBar = findViewById<EditText>(R.id.searchBar)
         searchBar.addTextChangedListener(object : TextWatcher {
             override fun afterTextChanged(s: Editable?) {
@@ -45,6 +48,24 @@ class MainActivity : AppCompatActivity() {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
         })
+
+        // Filter checkboxes for types
+        val checkboxIndica = findViewById<CheckBox>(R.id.checkbox_indica)
+        val checkboxSativa = findViewById<CheckBox>(R.id.checkbox_sativa)
+        val checkboxHybrid = findViewById<CheckBox>(R.id.checkbox_hybrid)
+
+        // Filter checkboxes for effects
+        val checkboxRelaxed = findViewById<CheckBox>(R.id.checkbox_relaxed)
+        val checkboxHappy = findViewById<CheckBox>(R.id.checkbox_happy)
+        val checkboxEnergetic = findViewById<CheckBox>(R.id.checkbox_energetic)
+
+        // Set listeners for checkboxes to trigger filtering
+        val checkboxes = listOf(checkboxIndica, checkboxSativa, checkboxHybrid, checkboxRelaxed, checkboxHappy, checkboxEnergetic)
+        for (checkbox in checkboxes) {
+            checkbox.setOnCheckedChangeListener { _, _ ->
+                filterStrains(searchBar.text.toString())
+            }
+        }
 
         // Logout and Add Strain Button setup
         findViewById<Button>(R.id.logoutButton).setOnClickListener { logout() }
@@ -65,9 +86,33 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun filterStrains(query: String) {
+        val checkboxIndica = findViewById<CheckBox>(R.id.checkbox_indica)
+        val checkboxSativa = findViewById<CheckBox>(R.id.checkbox_sativa)
+        val checkboxHybrid = findViewById<CheckBox>(R.id.checkbox_hybrid)
+        val checkboxRelaxed = findViewById<CheckBox>(R.id.checkbox_relaxed)
+        val checkboxHappy = findViewById<CheckBox>(R.id.checkbox_happy)
+        val checkboxEnergetic = findViewById<CheckBox>(R.id.checkbox_energetic)
+
+        // Gather selected filters
+        val selectedTypes = mutableListOf<String>()
+        if (checkboxIndica.isChecked) selectedTypes.add("indica")
+        if (checkboxSativa.isChecked) selectedTypes.add("sativa")
+        if (checkboxHybrid.isChecked) selectedTypes.add("hybrid")
+
+        val selectedEffects = mutableListOf<String>()
+        if (checkboxRelaxed.isChecked) selectedEffects.add("relaxed")
+        if (checkboxHappy.isChecked) selectedEffects.add("happy")
+        if (checkboxEnergetic.isChecked) selectedEffects.add("energetic")
+
+        // Filter strains based on search query, type, and effects
         val filteredStrains = strainList.filter { strain ->
-            strain.name.contains(query, ignoreCase = true)
+            val matchesQuery = strain.name.contains(query, ignoreCase = true)
+            val matchesType = selectedTypes.isEmpty() || selectedTypes.contains(strain.type.toLowerCase())
+            val matchesEffects = selectedEffects.isEmpty() || selectedEffects.all { it in strain.effects.map { effect -> effect.toLowerCase() } }
+
+            matchesQuery && matchesType && matchesEffects
         }
+
         strainAdapter.updateData(filteredStrains)
     }
 

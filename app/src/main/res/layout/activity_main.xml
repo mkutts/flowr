@@ -40,4 +40,59 @@
         android:text="Add New Strain"
         android:layout_gravity="center_horizontal"
         android:layout_marginTop="16dp" />
+
+    <!-- Add this under the search bar in activity_main.xml -->
+
+    <!-- Filter by Strain Type -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="8dp">
+
+        <CheckBox
+            android:id="@+id/checkbox_indica"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Indica" />
+
+        <CheckBox
+            android:id="@+id/checkbox_sativa"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Sativa" />
+
+        <CheckBox
+            android:id="@+id/checkbox_hybrid"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Hybrid" />
+    </LinearLayout>
+
+    <!-- Filter by Effects -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="8dp">
+
+        <CheckBox
+            android:id="@+id/checkbox_relaxed"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Relaxed" />
+
+        <CheckBox
+            android:id="@+id/checkbox_happy"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Happy" />
+
+        <CheckBox
+            android:id="@+id/checkbox_energetic"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Energetic" />
+    </LinearLayout>
+
 </LinearLayout>
