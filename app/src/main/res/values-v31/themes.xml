@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Main App Theme for API 31+ (inherits splash attrs) -->
+    <style name="Theme.Flowr" parent="Theme.Flowr.BaseSplash" />
+
+    <!-- Base Splash Theme with Android 12+ splash attrs -->
+    <style name="Theme.Flowr.BaseSplash" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowSplashScreenBackground">@android:color/black</item>
+
+        <!-- MUST point to the inset wrapper -->
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_splash_logo_inset</item>
+
+        <item name="android:windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
+        <item name="android:windowBackground">@drawable/splash_background</item>
+    </style>
+
+    <!-- Variants (optional) -->
+    <style name="Theme.Flowr.Splash.DarkLuxury" parent="Theme.Flowr.BaseSplash" />
+    <style name="Theme.Flowr.Splash.GradientModern" parent="Theme.Flowr.BaseSplash" />
+    <style name="Theme.Flowr.Splash.Photo" parent="Theme.Flowr.BaseSplash" />
+    <style name="Theme.Flowr.Splash.MinimalCream" parent="Theme.Flowr.BaseSplash" />
+</resources>

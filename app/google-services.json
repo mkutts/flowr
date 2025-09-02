@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "80244256957",
+    "project_id": "flowr-f5248",
+    "storage_bucket": "flowr-f5248.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:80244256957:android:46503071f92258ddf9c7d4",
+        "android_client_info": {
+          "package_name": "com.mdksolutions.flowr"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCCP1yBrkqwbY3bXv4PBH18oJ3bJS2rxBY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,33 +1,45 @@
-# Gradle files
+# --- Gradle ---
 .gradle/
 build/
+**/build/
 
-# Local configuration file (sdk path, etc)
+# --- Local config (do not commit) ---
 local.properties
+*.keystore
+*.jks
+*.keystore.properties
 
-# Log/OS Files
+# --- Android Studio / IntelliJ junk ---
+.idea/caches/
+.idea/libraries/
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/gradle.xml
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+.idea/modules.xml
+*.iml
+
+# --- Logs ---
 *.log
 
-# Android Studio generated files and folders
-captures/
+# --- Native build ---
 .externalNativeBuild/
 .cxx/
-*.apk
-output.json
+obj/
 
-# IntelliJ
-*.iml
-.idea/
-misc.xml
-deploymentTargetDropDown.xml
-render.experimental.xml
+# --- Test / profiling artifacts ---
+captures/
 
-# Keystore files
-*.jks
-*.keystore
+# --- Fastlane ---
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
 
-# Google Services (e.g. APIs or Firebase)
-google-services.json
+# --- Misc ---
+*.tmp
+*.temp
 
-# Android Profiling
-*.hprof
+# --- Google services ---
+# If you prefer to keep google-services.json private, uncomment the next line.
+# app/google-services.json

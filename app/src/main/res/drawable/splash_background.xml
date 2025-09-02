@@ -1,0 +1,16 @@
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Background gradient -->
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:startColor="#0B0B0D"
+                android:endColor="#1A1A20"
+                android:angle="90" />
+        </shape>
+    </item>
+
+    <!-- Centered logo -->
+    <item
+        android:gravity="center"
+        android:drawable="@drawable/ic_splash_logo" />
+</layer-list>
