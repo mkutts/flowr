@@ -18,6 +18,10 @@ import androidx.navigation.NavController
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 
+// 🆕 imports
+import android.util.Patterns
+import com.google.firebase.auth.EmailAuthProvider
+
 @Composable
 fun AuthScreen(navController: NavController) {
     val auth = FirebaseAuth.getInstance()
@@ -31,20 +35,48 @@ fun AuthScreen(navController: NavController) {
     var showResetDialog by remember { mutableStateOf(false) }
     var passwordVisible by remember { mutableStateOf(false) } // 👈 toggle state
 
+    // 🔁 Forgot password with enumeration-safe UX
     fun sendPasswordReset() {
-        if (email.isBlank()) {
+        val trimmed = email.trim()
+
+        if (trimmed.isEmpty()) {
             errorMessage = "Please enter your email first."
             return
         }
+        if (!Patterns.EMAIL_ADDRESS.matcher(trimmed).matches()) {
+            errorMessage = "Please enter a valid email address."
+            return
+        }
+
         isLoading = true
-        auth.sendPasswordResetEmail(email)
-            .addOnCompleteListener { task ->
-                isLoading = false
-                if (task.isSuccessful) {
-                    infoMessage = "Password reset link sent to $email."
-                    showResetDialog = true
+        errorMessage = ""
+        infoMessage = ""
+
+        auth.fetchSignInMethodsForEmail(trimmed)
+            .addOnCompleteListener { methodsTask ->
+                if (!methodsTask.isSuccessful) {
+                    isLoading = false
+                    errorMessage = "Couldn't verify email right now. Please try again."
+                    return@addOnCompleteListener
+                }
+
+                val methods = methodsTask.result?.signInMethods.orEmpty()
+                val supportsPassword = methods.contains(EmailAuthProvider.EMAIL_PASSWORD_SIGN_IN_METHOD)
+
+                if (supportsPassword) {
+                    // Only send reset if account exists AND supports password sign-in
+                    auth.sendPasswordResetEmail(trimmed)
+                        .addOnCompleteListener {
+                            isLoading = false
+                            // Generic, non-enumerating success message
+                            infoMessage = "If an account exists for $trimmed, you'll receive a password reset link shortly."
+                            showResetDialog = true
+                        }
                 } else {
-                    errorMessage = "Reset failed: ${task.exception?.message}"
+                    // Do not send; still show generic message to avoid revealing account existence
+                    isLoading = false
+                    infoMessage = "If an account exists for $trimmed, you'll receive a password reset link shortly. If you originally used Google/Apple, try that provider."
+                    showResetDialog = true
                 }
             }
     }
@@ -208,7 +240,7 @@ fun AuthScreen(navController: NavController) {
                 }
             }
 
-            // Success dialog after sending reset email
+            // Success dialog (shows generic message)
             if (showResetDialog) {
                 AlertDialog(
                     onDismissRequest = { showResetDialog = false },
