@@ -162,3 +162,5 @@ fun AuthScreen(navController: NavController) {
         }
     }
 }
+
+// add forgot password
