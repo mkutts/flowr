@@ -27,7 +27,27 @@ fun AuthScreen(navController: NavController) {
     var password by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
+    var infoMessage by remember { mutableStateOf("") }
+    var showResetDialog by remember { mutableStateOf(false) }
     var passwordVisible by remember { mutableStateOf(false) } // 👈 toggle state
+
+    fun sendPasswordReset() {
+        if (email.isBlank()) {
+            errorMessage = "Please enter your email first."
+            return
+        }
+        isLoading = true
+        auth.sendPasswordResetEmail(email)
+            .addOnCompleteListener { task ->
+                isLoading = false
+                if (task.isSuccessful) {
+                    infoMessage = "Password reset link sent to $email."
+                    showResetDialog = true
+                } else {
+                    errorMessage = "Reset failed: ${task.exception?.message}"
+                }
+            }
+    }
 
     // ✅ Solid background like AgeGateScreen
     Surface(
@@ -83,7 +103,22 @@ fun AuthScreen(navController: NavController) {
                         }
                     }
                 )
-                Spacer(modifier = Modifier.height(24.dp))
+
+                // Forgot password row
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
+                ) {
+                    TextButton(
+                        onClick = { sendPasswordReset() },
+                        modifier = Modifier.align(Alignment.CenterEnd)
+                    ) {
+                        Text("Forgot password?")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
 
                 if (isLoading) {
                     CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
@@ -109,8 +144,14 @@ fun AuthScreen(navController: NavController) {
                                                         launchSingleTop = true
                                                     }
                                                 }
-
                                             }
+                                            .addOnFailureListener { e ->
+                                                isLoading = false
+                                                errorMessage = "User check failed: ${e.message}"
+                                            }
+                                    } else {
+                                        isLoading = false
+                                        errorMessage = "No authenticated user found after sign up."
                                     }
                                 } else {
                                     errorMessage = "Sign Up Failed: ${task.exception?.message}"
@@ -139,6 +180,13 @@ fun AuthScreen(navController: NavController) {
                                                     navController.navigate("role_selection")
                                                 }
                                             }
+                                            .addOnFailureListener { e ->
+                                                isLoading = false
+                                                errorMessage = "User check failed: ${e.message}"
+                                            }
+                                    } else {
+                                        isLoading = false
+                                        errorMessage = "No authenticated user found after login."
                                     }
                                 } else {
                                     errorMessage = "Login Failed: ${task.exception?.message}"
@@ -159,8 +207,20 @@ fun AuthScreen(navController: NavController) {
                     )
                 }
             }
+
+            // Success dialog after sending reset email
+            if (showResetDialog) {
+                AlertDialog(
+                    onDismissRequest = { showResetDialog = false },
+                    title = { Text("Check your email") },
+                    text = { Text(infoMessage) },
+                    confirmButton = {
+                        TextButton(onClick = { showResetDialog = false }) {
+                            Text("OK")
+                        }
+                    }
+                )
+            }
         }
     }
 }
-
-// add forgot password
