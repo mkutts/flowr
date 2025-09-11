@@ -1,6 +1,9 @@
 package com.mdksolutions.flowr
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
@@ -10,17 +13,37 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.navigation.NavController
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import com.mdksolutions.flowr.navigation.AppNavGraph
 import com.mdksolutions.flowr.ui.theme.FlowrThemeType
-import com.mdksolutions.flowr.util.ensurePlayServices   // ⬅️ from Step 1
+import com.mdksolutions.flowr.util.ensurePlayServices
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+
+    // Keep a reference so we can navigate from onNewIntent
+    private lateinit var navControllerRef: NavHostController
+
+    // ✅ Hosts (no scheme) we accept
+    private val resetHosts = setOf(
+        "flowr-f5248.web.app",          // your customized in-app handler
+        "flowr-f5248.firebaseapp.com"   // fallback for default Firebase links
+    )
+
+    // ✅ Paths we accept
+    private val acceptedPathPrefixes = listOf(
+        "/auth/reset",          // your customized path
+        "/__/auth/action"       // default Firebase email action path
+    )
+
+    // Avoid handling the same link twice (cold start + onNewIntent, etc.)
+    private var lastHandledDeepLink: String? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Keep native splash until we decide Play Services status
         val splash = installSplashScreen()
         var keepSplash = true
         splash.setKeepOnScreenCondition { keepSplash }
@@ -28,31 +51,29 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         setContent {
-            // null = unknown (checking), true = OK, false = not available
             var playServicesOk by remember { mutableStateOf<Boolean?>(null) }
 
-            // Run the check once after first composition
             LaunchedEffect(Unit) {
                 playServicesOk = ensurePlayServices(this@MainActivity)
             }
 
-            // Once we know the result, release splash
             LaunchedEffect(playServicesOk) {
                 if (playServicesOk != null) keepSplash = false
             }
 
             when (playServicesOk) {
-                null -> {
-                    // Still checking — native splash is showing, render nothing.
-                }
+                null -> { /* native splash is showing */ }
                 true -> {
-                    // ✅ Normal app content
-                    val navController = rememberNavController()
+                    navControllerRef = rememberNavController()
                     val currentTheme = remember { mutableStateOf(FlowrThemeType.DARK_LUXURY) }
-                    AppNavGraph(navController = navController, themeType = currentTheme.value)
+                    AppNavGraph(navController = navControllerRef, themeType = currentTheme.value)
+
+                    // Handle deep link when app is launched cold
+                    LaunchedEffect(Unit) {
+                        intent?.let { handleResetLink(navControllerRef, it) }
+                    }
                 }
                 false -> {
-                    // ❌ Block with a friendly UI and let the user retry
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
@@ -65,18 +86,53 @@ class MainActivity : ComponentActivity() {
                             Spacer(Modifier.height(12.dp))
                             Button(onClick = {
                                 playServicesOk = ensurePlayServices(this@MainActivity)
-                            }) {
-                                Text("Retry")
-                            }
+                            }) { Text("Retry") }
                         }
                     }
                 }
             }
         }
 
-        // 🔁 Non‑critical warmups AFTER the first frame
         lifecycleScope.launch(Dispatchers.Default) {
-            // e.g., Remote Config fetch, analytics warmup, lightweight prefetches
+            // post-first-frame warmups
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (::navControllerRef.isInitialized) {
+            handleResetLink(navControllerRef, intent)
+        }
+    }
+
+    private fun handleResetLink(navController: NavController, intent: Intent) {
+        val uri: Uri = intent.data ?: return
+
+        val linkKey = uri.toString()
+        if (lastHandledDeepLink == linkKey) {
+            Log.d("FPW", "Deep link already handled, skipping: $linkKey")
+            return
+        }
+
+        // Guard: https + known host + known path
+        if (uri.scheme != "https") return
+        val host = uri.host ?: return
+        if (host !in resetHosts) return
+
+        val path = uri.path.orEmpty()
+        if (acceptedPathPrefixes.none { prefix -> path.startsWith(prefix) }) return
+
+        val mode = uri.getQueryParameter("mode")
+        val oob  = uri.getQueryParameter("oobCode")
+
+        Log.d("FPW", "Deep link matched host=$host path=$path mode=$mode oob=${oob?.take(6)}…")
+
+        if (mode == "resetPassword" && !oob.isNullOrBlank()) {
+            lastHandledDeepLink = linkKey
+            navController.navigate("reset_password?oob=${Uri.encode(oob)}") {
+                launchSingleTop = true
+            }
         }
     }
 }

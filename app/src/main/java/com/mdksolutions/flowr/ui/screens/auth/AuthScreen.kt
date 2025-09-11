@@ -18,6 +18,14 @@ import androidx.navigation.NavController
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 
+// 🆕 imports
+import android.util.Patterns
+import android.util.Log
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
+import com.google.firebase.auth.ActionCodeSettings   // <-- use in-app handler
+// (Removed: EmailAuthProvider import)
+
 @Composable
 fun AuthScreen(navController: NavController) {
     val auth = FirebaseAuth.getInstance()
@@ -27,7 +35,57 @@ fun AuthScreen(navController: NavController) {
     var password by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
+    var infoMessage by remember { mutableStateOf("") }
+    var showResetDialog by remember { mutableStateOf(false) }
     var passwordVisible by remember { mutableStateOf(false) } // 👈 toggle state
+    val ctx = LocalContext.current // for toast
+
+    // 🔁 Forgot password — enumeration-safe (always attempt send)
+    fun sendPasswordReset() {
+        val trimmed = email.trim()
+
+        if (trimmed.isEmpty()) {
+            errorMessage = "Please enter your email first."
+            return
+        }
+        if (!Patterns.EMAIL_ADDRESS.matcher(trimmed).matches()) {
+            errorMessage = "Please enter a valid email address."
+            return
+        }
+
+        isLoading = true
+        errorMessage = ""
+        infoMessage = ""
+
+        // Logs to verify config
+        Log.d("FPW", "Project ID: ${auth.app.options.projectId}")
+        Log.d("FPW", "Reset requested for: $trimmed")
+
+        // Use your Hosting deep link handler
+        val acs = ActionCodeSettings.newBuilder()
+            .setUrl("https://flowr-f5248.web.app/auth/reset")
+            .setHandleCodeInApp(true)
+            // Optional: ensure Android app is a valid target
+            //.setAndroidPackageName(ctx.packageName, true, null)
+            .build()
+
+        // Always queue the email; Firebase stays enumeration-safe with protections enabled
+        auth.sendPasswordResetEmail(trimmed, acs)
+            .addOnCompleteListener { task ->
+                isLoading = false
+                if (task.isSuccessful) {
+                    Log.d("FPW", "sendPasswordResetEmail SUCCESS (in-app handler)")
+                    infoMessage =
+                        "If an account exists for $trimmed, you'll receive a password reset link shortly."
+                    showResetDialog = true
+                } else {
+                    val err = task.exception?.localizedMessage ?: "Unknown error"
+                    Log.e("FPW", "sendPasswordResetEmail FAILED: $err")
+                    errorMessage = "We couldn’t send the reset email right now. Please try again."
+                    Toast.makeText(ctx, "Reset send failed: $err", Toast.LENGTH_LONG).show()
+                }
+            }
+    }
 
     // ✅ Solid background like AgeGateScreen
     Surface(
@@ -83,7 +141,22 @@ fun AuthScreen(navController: NavController) {
                         }
                     }
                 )
-                Spacer(modifier = Modifier.height(24.dp))
+
+                // Forgot password row
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
+                ) {
+                    TextButton(
+                        onClick = { sendPasswordReset() },
+                        modifier = Modifier.align(Alignment.CenterEnd)
+                    ) {
+                        Text("Forgot password?")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
 
                 if (isLoading) {
                     CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
@@ -109,17 +182,21 @@ fun AuthScreen(navController: NavController) {
                                                         launchSingleTop = true
                                                     }
                                                 }
-
                                             }
+                                            .addOnFailureListener { e ->
+                                                isLoading = false
+                                                errorMessage = "User check failed: ${e.message}"
+                                            }
+                                    } else {
+                                        isLoading = false
+                                        errorMessage = "No authenticated user found after sign up."
                                     }
                                 } else {
                                     errorMessage = "Sign Up Failed: ${task.exception?.message}"
                                     isLoading = false
                                 }
                             }
-                    }) {
-                        Text("Sign Up")
-                    }
+                    }) { Text("Sign Up") }
 
                     Spacer(modifier = Modifier.height(12.dp))
 
@@ -139,15 +216,20 @@ fun AuthScreen(navController: NavController) {
                                                     navController.navigate("role_selection")
                                                 }
                                             }
+                                            .addOnFailureListener { e ->
+                                                isLoading = false
+                                                errorMessage = "User check failed: ${e.message}"
+                                            }
+                                    } else {
+                                        isLoading = false
+                                        errorMessage = "No authenticated user found after login."
                                     }
                                 } else {
                                     errorMessage = "Login Failed: ${task.exception?.message}"
                                     isLoading = false
                                 }
                             }
-                    }) {
-                        Text("Login")
-                    }
+                    }) { Text("Login") }
                 }
 
                 if (errorMessage.isNotEmpty()) {
@@ -158,6 +240,20 @@ fun AuthScreen(navController: NavController) {
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
+            }
+
+            // Success dialog (shows generic message)
+            if (showResetDialog) {
+                AlertDialog(
+                    onDismissRequest = { showResetDialog = false },
+                    title = { Text("Check your email") },
+                    text = { Text(infoMessage) },
+                    confirmButton = {
+                        TextButton(onClick = { showResetDialog = false }) {
+                            Text("OK")
+                        }
+                    }
+                )
             }
         }
     }
