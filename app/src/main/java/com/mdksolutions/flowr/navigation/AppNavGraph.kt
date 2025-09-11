@@ -4,8 +4,11 @@ import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
+import androidx.navigation.NavType
 import com.mdksolutions.flowr.ui.screens.agegate.AgeGateScreen
 import com.mdksolutions.flowr.ui.screens.auth.AuthScreen
+import com.mdksolutions.flowr.ui.screens.auth.ResetPasswordScreen
 import com.mdksolutions.flowr.ui.screens.home.AddProductScreen
 import com.mdksolutions.flowr.ui.screens.roleselection.RoleSelectionScreen
 import com.mdksolutions.flowr.ui.screens.home.HomeScreen
@@ -49,6 +52,15 @@ fun AppNavGraph(
             composable("add_review/{productId}") { backStackEntry ->
                 val productId = backStackEntry.arguments?.getString("productId")
                 AddReviewScreen(navController, productId)
+            }
+
+            // 🔐 New route: in-app password reset screen
+            composable(
+                route = "reset_password?oob={oob}",
+                arguments = listOf(navArgument("oob") { type = NavType.StringType; nullable = false })
+            ) { backStackEntry ->
+                val oobCode = backStackEntry.arguments?.getString("oob")!!
+                ResetPasswordScreen(navController, oobCode)
             }
         }
     }

@@ -20,7 +20,11 @@ import com.google.firebase.firestore.FirebaseFirestore
 
 // 🆕 imports
 import android.util.Patterns
-import com.google.firebase.auth.EmailAuthProvider
+import android.util.Log
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
+import com.google.firebase.auth.ActionCodeSettings   // <-- use in-app handler
+// (Removed: EmailAuthProvider import)
 
 @Composable
 fun AuthScreen(navController: NavController) {
@@ -34,8 +38,9 @@ fun AuthScreen(navController: NavController) {
     var infoMessage by remember { mutableStateOf("") }
     var showResetDialog by remember { mutableStateOf(false) }
     var passwordVisible by remember { mutableStateOf(false) } // 👈 toggle state
+    val ctx = LocalContext.current // for toast
 
-    // 🔁 Forgot password with enumeration-safe UX
+    // 🔁 Forgot password — enumeration-safe (always attempt send)
     fun sendPasswordReset() {
         val trimmed = email.trim()
 
@@ -52,31 +57,32 @@ fun AuthScreen(navController: NavController) {
         errorMessage = ""
         infoMessage = ""
 
-        auth.fetchSignInMethodsForEmail(trimmed)
-            .addOnCompleteListener { methodsTask ->
-                if (!methodsTask.isSuccessful) {
-                    isLoading = false
-                    errorMessage = "Couldn't verify email right now. Please try again."
-                    return@addOnCompleteListener
-                }
+        // Logs to verify config
+        Log.d("FPW", "Project ID: ${auth.app.options.projectId}")
+        Log.d("FPW", "Reset requested for: $trimmed")
 
-                val methods = methodsTask.result?.signInMethods.orEmpty()
-                val supportsPassword = methods.contains(EmailAuthProvider.EMAIL_PASSWORD_SIGN_IN_METHOD)
+        // Use your Hosting deep link handler
+        val acs = ActionCodeSettings.newBuilder()
+            .setUrl("https://flowr-f5248.web.app/auth/reset")
+            .setHandleCodeInApp(true)
+            // Optional: ensure Android app is a valid target
+            //.setAndroidPackageName(ctx.packageName, true, null)
+            .build()
 
-                if (supportsPassword) {
-                    // Only send reset if account exists AND supports password sign-in
-                    auth.sendPasswordResetEmail(trimmed)
-                        .addOnCompleteListener {
-                            isLoading = false
-                            // Generic, non-enumerating success message
-                            infoMessage = "If an account exists for $trimmed, you'll receive a password reset link shortly."
-                            showResetDialog = true
-                        }
-                } else {
-                    // Do not send; still show generic message to avoid revealing account existence
-                    isLoading = false
-                    infoMessage = "If an account exists for $trimmed, you'll receive a password reset link shortly. If you originally used Google/Apple, try that provider."
+        // Always queue the email; Firebase stays enumeration-safe with protections enabled
+        auth.sendPasswordResetEmail(trimmed, acs)
+            .addOnCompleteListener { task ->
+                isLoading = false
+                if (task.isSuccessful) {
+                    Log.d("FPW", "sendPasswordResetEmail SUCCESS (in-app handler)")
+                    infoMessage =
+                        "If an account exists for $trimmed, you'll receive a password reset link shortly."
                     showResetDialog = true
+                } else {
+                    val err = task.exception?.localizedMessage ?: "Unknown error"
+                    Log.e("FPW", "sendPasswordResetEmail FAILED: $err")
+                    errorMessage = "We couldn’t send the reset email right now. Please try again."
+                    Toast.makeText(ctx, "Reset send failed: $err", Toast.LENGTH_LONG).show()
                 }
             }
     }
@@ -190,9 +196,7 @@ fun AuthScreen(navController: NavController) {
                                     isLoading = false
                                 }
                             }
-                    }) {
-                        Text("Sign Up")
-                    }
+                    }) { Text("Sign Up") }
 
                     Spacer(modifier = Modifier.height(12.dp))
 
@@ -225,9 +229,7 @@ fun AuthScreen(navController: NavController) {
                                     isLoading = false
                                 }
                             }
-                    }) {
-                        Text("Login")
-                    }
+                    }) { Text("Login") }
                 }
 
                 if (errorMessage.isNotEmpty()) {
