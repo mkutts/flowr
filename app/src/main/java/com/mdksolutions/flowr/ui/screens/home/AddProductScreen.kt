@@ -19,11 +19,12 @@ fun AddProductScreen(navController: NavController, viewModel: HomeViewModel = vi
 
     var name by remember { mutableStateOf("") }
     var brand by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf("") }
 
     // --- Category dropdown ---
     val categoryOptions = listOf("Flower", "Edible", "Vape", "Concentrate", "Pre-Roll", "Other")
+    var category by remember { mutableStateOf("") }
     var categoryMenuExpanded by remember { mutableStateOf(false) }
+    var otherCategory by remember { mutableStateOf("") } // shown when category == "Other"
 
     // --- State dropdown ---
     val stateOptions = listOf(
@@ -38,7 +39,7 @@ fun AddProductScreen(navController: NavController, viewModel: HomeViewModel = vi
     var selectedState by remember { mutableStateOf("") }
     var stateMenuExpanded by remember { mutableStateOf(false) }
 
-    // --- Strain Type dropdown (existing) ---
+    // --- Strain Type dropdown ---
     val strainOptions = listOf("Indica", "Sativa", "Hybrid", "Sativa-hybrid", "Indica-Hybrid")
     var strainType by remember { mutableStateOf("") }
     var strainMenuExpanded by remember { mutableStateOf(false) }
@@ -106,7 +107,7 @@ fun AddProductScreen(navController: NavController, viewModel: HomeViewModel = vi
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     OutlinedTextField(
-                        value = category,
+                        value = if (category.isEmpty()) "" else category,
                         onValueChange = {},
                         readOnly = true,
                         label = { Text("Category") },
@@ -124,15 +125,30 @@ fun AddProductScreen(navController: NavController, viewModel: HomeViewModel = vi
                                 text = { Text(option) },
                                 onClick = {
                                     category = option
+                                    if (option != "Other") otherCategory = "" // clear custom if leaving Other
                                     categoryMenuExpanded = false
                                 }
                             )
                         }
                     }
                 }
+
+                // 🆕 Custom category input (only if "Other" selected)
+                if (category == "Other") {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = otherCategory,
+                        onValueChange = { otherCategory = it },
+                        label = { Text("Custom Category") },
+                        placeholder = { Text("e.g., Tincture, Topical, Capsule…") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // 🆕 State dropdown (replaces free-text)
+                // State dropdown
                 ExposedDropdownMenuBox(
                     expanded = stateMenuExpanded,
                     onExpandedChange = { stateMenuExpanded = !stateMenuExpanded },
@@ -166,7 +182,7 @@ fun AddProductScreen(navController: NavController, viewModel: HomeViewModel = vi
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // 🆕 Strain Type dropdown
+                // Strain Type dropdown
                 ExposedDropdownMenuBox(
                     expanded = strainMenuExpanded,
                     onExpandedChange = { strainMenuExpanded = !strainMenuExpanded },
@@ -205,22 +221,34 @@ fun AddProductScreen(navController: NavController, viewModel: HomeViewModel = vi
                 } else {
                     Button(
                         onClick = {
+                            val finalCategory = if (category == "Other") otherCategory.trim() else category
+                            val categoryValid = finalCategory.isNotEmpty()
+
                             if (name.isNotEmpty() &&
                                 brand.isNotEmpty() &&
-                                category.isNotEmpty() &&
+                                categoryValid &&
                                 selectedState.isNotEmpty() &&
                                 strainType.isNotEmpty()
                             ) {
                                 val product = Product(
                                     name = name,
                                     brand = brand,
-                                    category = category,
-                                    state = selectedState, // 👈 from dropdown
+                                    category = finalCategory,   // 👈 saves custom value when "Other"
+                                    state = selectedState,
                                     strainType = strainType
                                 )
                                 viewModel.addProduct(product)
                             } else {
-                                validationMessage = "Please fill in all fields (including State and Strain Type)"
+                                validationMessage = when {
+                                    name.isEmpty() -> "Please enter a product name"
+                                    brand.isEmpty() -> "Please enter a brand"
+                                    category.isEmpty() -> "Please select a category"
+                                    category == "Other" && otherCategory.isBlank() ->
+                                        "Please enter a custom category"
+                                    selectedState.isEmpty() -> "Please select a state"
+                                    strainType.isEmpty() -> "Please select a strain type"
+                                    else -> "Please fill in all fields"
+                                }
                             }
                         },
                         modifier = Modifier.fillMaxWidth()
