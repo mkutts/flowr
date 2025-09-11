@@ -21,6 +21,10 @@ fun AddProductScreen(navController: NavController, viewModel: HomeViewModel = vi
     var brand by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("") }
 
+    // --- Category dropdown ---
+    val categoryOptions = listOf("Flower", "Edible", "Vape", "Concentrate", "Pre-Roll", "Other")
+    var categoryMenuExpanded by remember { mutableStateOf(false) }
+
     // --- State dropdown ---
     val stateOptions = listOf(
         "Alabama","Alaska","Arizona","Arkansas","California","Colorado","Connecticut","Delaware",
@@ -95,12 +99,37 @@ fun AddProductScreen(navController: NavController, viewModel: HomeViewModel = vi
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
-                OutlinedTextField(
-                    value = category,
-                    onValueChange = { category = it },
-                    label = { Text("Category (flower, edible, etc.)") },
+                // 🆕 Category dropdown
+                ExposedDropdownMenuBox(
+                    expanded = categoryMenuExpanded,
+                    onExpandedChange = { categoryMenuExpanded = !categoryMenuExpanded },
                     modifier = Modifier.fillMaxWidth()
-                )
+                ) {
+                    OutlinedTextField(
+                        value = category,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Category") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = categoryMenuExpanded) },
+                        modifier = Modifier
+                            .menuAnchor()
+                            .fillMaxWidth()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = categoryMenuExpanded,
+                        onDismissRequest = { categoryMenuExpanded = false }
+                    ) {
+                        categoryOptions.forEach { option ->
+                            DropdownMenuItem(
+                                text = { Text(option) },
+                                onClick = {
+                                    category = option
+                                    categoryMenuExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // 🆕 State dropdown (replaces free-text)
@@ -186,7 +215,7 @@ fun AddProductScreen(navController: NavController, viewModel: HomeViewModel = vi
                                     name = name,
                                     brand = brand,
                                     category = category,
-                                    state = selectedState, // 👈 use dropdown value
+                                    state = selectedState, // 👈 from dropdown
                                     strainType = strainType
                                 )
                                 viewModel.addProduct(product)
