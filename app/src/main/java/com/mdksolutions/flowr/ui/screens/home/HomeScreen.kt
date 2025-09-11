@@ -37,19 +37,52 @@ import com.google.firebase.firestore.FirebaseFirestore
 import androidx.activity.compose.BackHandler
 import android.app.Activity
 
-// 🔒 Hoisted constants (no per-recomposition allocations)
-// States with medical and/or adult-use cannabis (excludes CBD-only)
-// Last updated: 2025-08-12
-private val STATES = listOf(
-    "All States",
-    "AK","AL","AZ","AR","CA","CO","CT","DE","FL","GA","HI","IL","IA","KY","LA","ME","MD","MA",
-    "MI","MN","MO","MS","MT","NV","NH","NJ","NM","NY","ND","OH","OK","OR","PA","RI","SD","TX",
-    "UT","VT","VA","WA","WV"
+/* -------------------- State lists & helpers -------------------- */
+
+// Canonical pairs for all 50 states + DC
+private val STATE_PAIRS = listOf(
+    "AL" to "Alabama", "AK" to "Alaska", "AZ" to "Arizona", "AR" to "Arkansas",
+    "CA" to "California", "CO" to "Colorado", "CT" to "Connecticut", "DE" to "Delaware",
+    "DC" to "District of Columbia",
+    "FL" to "Florida", "GA" to "Georgia", "HI" to "Hawaii", "ID" to "Idaho",
+    "IL" to "Illinois", "IN" to "Indiana", "IA" to "Iowa", "KS" to "Kansas",
+    "KY" to "Kentucky", "LA" to "Louisiana", "ME" to "Maine", "MD" to "Maryland",
+    "MA" to "Massachusetts", "MI" to "Michigan", "MN" to "Minnesota", "MS" to "Mississippi",
+    "MO" to "Missouri", "MT" to "Montana", "NE" to "Nebraska", "NV" to "Nevada",
+    "NH" to "New Hampshire", "NJ" to "New Jersey", "NM" to "New Mexico", "NY" to "New York",
+    "NC" to "North Carolina", "ND" to "North Dakota", "OH" to "Ohio", "OK" to "Oklahoma",
+    "OR" to "Oregon", "PA" to "Pennsylvania", "RI" to "Rhode Island", "SC" to "South Carolina",
+    "SD" to "South Dakota", "TN" to "Tennessee", "TX" to "Texas", "UT" to "Utah",
+    "VT" to "Vermont", "VA" to "Virginia", "WA" to "Washington", "WV" to "West Virginia",
+    "WI" to "Wisconsin", "WY" to "Wyoming"
 )
+
+private val STATE_ABBR_TO_NAME = STATE_PAIRS.toMap()
+private val STATE_NAME_CANON = STATE_PAIRS.associate { it.second.lowercase() to it.second }
+
+// Dropdown uses full names:
+private val STATES = listOf("All States") + STATE_PAIRS.map { it.second }
+
+// Categories (unchanged)
 private val CATEGORIES = listOf("Flower", "Edible", "Vape", "Other")
+
 // FEELS/ACTIVITIES kept for now; safe to delete later if unused
 private val FEELS = listOf("Relaxed", "Happy", "Focused")
 private val ACTIVITIES = listOf("Gaming", "Watching TV", "Nature Walk")
+
+// Convert abbreviations or variants to canonical full name
+private fun toStateName(value: String): String {
+    val v = value.trim()
+    if (v.isEmpty()) return v
+    // Try abbreviation first (e.g., "CA")
+    STATE_ABBR_TO_NAME[v.uppercase()]?.let { return it }
+    // Then try full name case-insensitively (proper-case it)
+    STATE_NAME_CANON[v.lowercase()]?.let { return it }
+    // Accept as-is (for unexpected inputs); still participates in lowercase compare later
+    return v
+}
+
+/* -------------------- Adjective & Activity dictionaries -------------------- */
 
 // Loads adjectives from assets/adjectives.json (JSON array of strings). Falls back safely.
 @Composable
@@ -62,7 +95,6 @@ private fun rememberAdjectiveDictionary(): List<String> {
                 .use(BufferedReader::readText)
                 .trim()
 
-            // Minimal parsing for ["a","b","c"] without extra deps
             val words = json
                 .removePrefix("[")
                 .removeSuffix("]")
@@ -195,10 +227,8 @@ private fun AvgThcText(
     fun computeAvg(values: List<Double>): Double =
         if (values.isNotEmpty()) values.average() else Double.NaN
 
-    // Pull THC list from a query result
     fun pullThcValues(docs: List<com.google.firebase.firestore.DocumentSnapshot>): List<Double> {
         return docs.mapNotNull { d ->
-            // Accept reportedTHC, thc, or thcPercent; clamp 0..100
             val v = numberFromAny(
                 d.get("reportedTHC") ?: d.get("thc") ?: d.get("thcPercent")
             )
@@ -207,10 +237,7 @@ private fun AvgThcText(
     }
 
     LaunchedEffect(productId) {
-        // If we already have a positive avg, don't fetch
         if (avg.isFinite() && avg > 0) return@LaunchedEffect
-
-        // 1) Try subcollection: products/{productId}/reviews
         db.collection("products").document(productId).collection("reviews")
             .get()
             .addOnSuccessListener { qs ->
@@ -219,7 +246,6 @@ private fun AvgThcText(
                 if (a.isFinite()) {
                     avg = a
                 } else {
-                    // 2) Fallback: root 'reviews' with productId == {productId}
                     db.collection("reviews")
                         .whereEqualTo("productId", productId)
                         .get()
@@ -228,11 +254,10 @@ private fun AvgThcText(
                             val a2 = computeAvg(vals2)
                             if (a2.isFinite()) avg = a2
                         }
-                        .addOnFailureListener { /* ignore; show dash */ }
+                        .addOnFailureListener { /* ignore */ }
                 }
             }
             .addOnFailureListener {
-                // As a last resort, try the root collection anyway
                 db.collection("reviews")
                     .whereEqualTo("productId", productId)
                     .get()
@@ -248,25 +273,21 @@ private fun AvgThcText(
     Text(text = "Avg THC: $text")
 }
 
+/* -------------------- Home Screen -------------------- */
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     navController: NavController,
     backStackEntry: NavBackStackEntry
 ) {
-    // ✅ ViewModel scoped to this destination
     val viewModel: HomeViewModel = viewModel(backStackEntry)
-
-    // ✅ Lifecycle-aware collection (stops when you leave the screen)
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // ✅ Exit the app when back is pressed on Home
     val activity = LocalContext.current as? Activity
     BackHandler { activity?.finish() }
 
-    // ✅ Snackbar for messages
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let {
             snackbarHostState.showSnackbar(it)
@@ -274,7 +295,6 @@ fun HomeScreen(
         }
     }
 
-    // ✅ Remember static lists (cheap, avoids churn)
     val states = remember { STATES }
     val categories = remember { CATEGORIES }
 
@@ -334,7 +354,7 @@ fun HomeScreen(
                 )
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // ✅ State Dropdown Filter
+                // ✅ State Dropdown Filter (full names)
                 var stateMenuExpanded by remember { mutableStateOf(false) }
                 ExposedDropdownMenuBox(
                     expanded = stateMenuExpanded,
@@ -552,7 +572,7 @@ fun HomeScreen(
             // ── Product list (focus area) ──────────────────────────────────
             Spacer(Modifier.height(4.dp))
 
-            // ✅ Memoized filtering (fast + stable)
+            // ✅ Memoized filtering (now normalizes state names/abbr)
             val filteredProducts by remember(
                 uiState.products,
                 uiState.searchQuery,
@@ -564,7 +584,7 @@ fun HomeScreen(
                 derivedStateOf {
                     val q = uiState.searchQuery.trim().lowercase()
                     val cat = uiState.selectedCategory?.lowercase()
-                    val st = uiState.selectedState?.lowercase()
+                    val st = uiState.selectedState?.takeUnless { it == "All States" }?.let { toStateName(it).lowercase() }
                     val feel = uiState.selectedFeel
                     val activity = uiState.selectedActivity
 
@@ -572,15 +592,15 @@ fun HomeScreen(
                         val nameL = p.name.lowercase()
                         val brandL = p.brand.lowercase()
                         val catL = p.category.lowercase()
-                        val stateL = p.state.lowercase()
+                        val stateNameL = toStateName(p.state).lowercase() // normalize product state too
 
                         (q.isEmpty() || nameL.contains(q) || brandL.contains(q)) &&
                                 (
                                         cat == null ||
-                                                (cat == "other" && catL !in listOf("flower", "vape", "edible")) ||
+                                                (cat == "other" && catL !in listOf("flower", "vape", "edible", "concentrate", "pre-roll", "pre roll")) ||
                                                 (cat != "other" && catL == cat)
                                         ) &&
-                                (st == null || stateL == st) &&
+                                (st == null || stateNameL == st) &&
                                 (feel == null || p.topFeels.any { it.equals(feel, ignoreCase = true) }) &&
                                 (activity == null || p.topActivities.any { it.equals(activity, ignoreCase = true) })
                     }
@@ -631,13 +651,11 @@ fun ProductItem(product: Product, onClick: () -> Unit) {
             Text(text = product.name, style = MaterialTheme.typography.titleMedium)
             Text(text = "Brand: ${product.brand}")
             Text(text = "Category: ${product.category}")
-            Text(text = "State: ${product.state}")
+            Text(text = "State: ${toStateName(product.state)}") // Show canonical full name
 
-            // ✅ New line for strain type (only if non-blank)
             if (product.strainType.isNotBlank()) {
                 Text(text = "Strain: ${product.strainType}")
             }
-
             if (product.topFeels.isNotEmpty()) {
                 Text(text = "Feels: ${product.topFeels.joinToString(", ")}")
             }
@@ -645,7 +663,6 @@ fun ProductItem(product: Product, onClick: () -> Unit) {
                 Text(text = "Activities: ${product.topActivities.joinToString(", ")}")
             }
 
-            // 🔢 Real average: use stored value if > 0, else compute from reviews
             AvgThcText(productId = product.id, initialAvgThc = product.avgTHC)
         }
     }
