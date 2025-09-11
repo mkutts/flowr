@@ -19,10 +19,27 @@ fun AddProductScreen(navController: NavController, viewModel: HomeViewModel = vi
 
     var name by remember { mutableStateOf("") }
     var brand by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf("") }
-    var state by remember { mutableStateOf("") }
 
-    // 🆕 Strain Type state
+    // --- Category dropdown ---
+    val categoryOptions = listOf("Flower", "Edible", "Vape", "Concentrate", "Pre-Roll", "Other")
+    var category by remember { mutableStateOf("") }
+    var categoryMenuExpanded by remember { mutableStateOf(false) }
+    var otherCategory by remember { mutableStateOf("") } // shown when category == "Other"
+
+    // --- State dropdown ---
+    val stateOptions = listOf(
+        "Alabama","Alaska","Arizona","Arkansas","California","Colorado","Connecticut","Delaware",
+        "District of Columbia","Florida","Georgia","Hawaii","Idaho","Illinois","Indiana","Iowa",
+        "Kansas","Kentucky","Louisiana","Maine","Maryland","Massachusetts","Michigan","Minnesota",
+        "Mississippi","Missouri","Montana","Nebraska","Nevada","New Hampshire","New Jersey",
+        "New Mexico","New York","North Carolina","North Dakota","Ohio","Oklahoma","Oregon",
+        "Pennsylvania","Rhode Island","South Carolina","South Dakota","Tennessee","Texas","Utah",
+        "Vermont","Virginia","Washington","West Virginia","Wisconsin","Wyoming"
+    )
+    var selectedState by remember { mutableStateOf("") }
+    var stateMenuExpanded by remember { mutableStateOf(false) }
+
+    // --- Strain Type dropdown ---
     val strainOptions = listOf("Indica", "Sativa", "Hybrid", "Sativa-hybrid", "Indica-Hybrid")
     var strainType by remember { mutableStateOf("") }
     var strainMenuExpanded by remember { mutableStateOf(false) }
@@ -34,7 +51,7 @@ fun AddProductScreen(navController: NavController, viewModel: HomeViewModel = vi
         uiState.errorMessage?.let {
             snackbarHostState.showSnackbar(it)
             if (it.contains("success", ignoreCase = true)) {
-                navController.popBackStack() // Navigate back after success
+                navController.popBackStack()
             }
             viewModel.clearMessage()
         }
@@ -83,23 +100,89 @@ fun AddProductScreen(navController: NavController, viewModel: HomeViewModel = vi
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
-                OutlinedTextField(
-                    value = category,
-                    onValueChange = { category = it },
-                    label = { Text("Category (flower, edible, etc.)") },
+                // 🆕 Category dropdown
+                ExposedDropdownMenuBox(
+                    expanded = categoryMenuExpanded,
+                    onExpandedChange = { categoryMenuExpanded = !categoryMenuExpanded },
                     modifier = Modifier.fillMaxWidth()
-                )
+                ) {
+                    OutlinedTextField(
+                        value = if (category.isEmpty()) "" else category,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Category") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = categoryMenuExpanded) },
+                        modifier = Modifier
+                            .menuAnchor()
+                            .fillMaxWidth()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = categoryMenuExpanded,
+                        onDismissRequest = { categoryMenuExpanded = false }
+                    ) {
+                        categoryOptions.forEach { option ->
+                            DropdownMenuItem(
+                                text = { Text(option) },
+                                onClick = {
+                                    category = option
+                                    if (option != "Other") otherCategory = "" // clear custom if leaving Other
+                                    categoryMenuExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                // 🆕 Custom category input (only if "Other" selected)
+                if (category == "Other") {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = otherCategory,
+                        onValueChange = { otherCategory = it },
+                        label = { Text("Custom Category") },
+                        placeholder = { Text("e.g., Tincture, Topical, Capsule…") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(8.dp))
 
-                OutlinedTextField(
-                    value = state,
-                    onValueChange = { state = it },
-                    label = { Text("State") },
+                // State dropdown
+                ExposedDropdownMenuBox(
+                    expanded = stateMenuExpanded,
+                    onExpandedChange = { stateMenuExpanded = !stateMenuExpanded },
                     modifier = Modifier.fillMaxWidth()
-                )
+                ) {
+                    OutlinedTextField(
+                        value = selectedState,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("State") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = stateMenuExpanded) },
+                        modifier = Modifier
+                            .menuAnchor()
+                            .fillMaxWidth()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = stateMenuExpanded,
+                        onDismissRequest = { stateMenuExpanded = false }
+                    ) {
+                        stateOptions.forEach { option ->
+                            DropdownMenuItem(
+                                text = { Text(option) },
+                                onClick = {
+                                    selectedState = option
+                                    stateMenuExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // 🆕 Strain Type dropdown
+                // Strain Type dropdown
                 ExposedDropdownMenuBox(
                     expanded = strainMenuExpanded,
                     onExpandedChange = { strainMenuExpanded = !strainMenuExpanded },
@@ -138,22 +221,34 @@ fun AddProductScreen(navController: NavController, viewModel: HomeViewModel = vi
                 } else {
                     Button(
                         onClick = {
+                            val finalCategory = if (category == "Other") otherCategory.trim() else category
+                            val categoryValid = finalCategory.isNotEmpty()
+
                             if (name.isNotEmpty() &&
                                 brand.isNotEmpty() &&
-                                category.isNotEmpty() &&
-                                state.isNotEmpty() &&
+                                categoryValid &&
+                                selectedState.isNotEmpty() &&
                                 strainType.isNotEmpty()
                             ) {
                                 val product = Product(
                                     name = name,
                                     brand = brand,
-                                    category = category,
-                                    state = state,
+                                    category = finalCategory,   // 👈 saves custom value when "Other"
+                                    state = selectedState,
                                     strainType = strainType
                                 )
                                 viewModel.addProduct(product)
                             } else {
-                                validationMessage = "Please fill in all fields (including Strain Type)"
+                                validationMessage = when {
+                                    name.isEmpty() -> "Please enter a product name"
+                                    brand.isEmpty() -> "Please enter a brand"
+                                    category.isEmpty() -> "Please select a category"
+                                    category == "Other" && otherCategory.isBlank() ->
+                                        "Please enter a custom category"
+                                    selectedState.isEmpty() -> "Please select a state"
+                                    strainType.isEmpty() -> "Please select a strain type"
+                                    else -> "Please fill in all fields"
+                                }
                             }
                         },
                         modifier = Modifier.fillMaxWidth()
