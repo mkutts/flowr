@@ -20,9 +20,21 @@ fun AddProductScreen(navController: NavController, viewModel: HomeViewModel = vi
     var name by remember { mutableStateOf("") }
     var brand by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("") }
-    var state by remember { mutableStateOf("") }
 
-    // 🆕 Strain Type state
+    // --- State dropdown ---
+    val stateOptions = listOf(
+        "Alabama","Alaska","Arizona","Arkansas","California","Colorado","Connecticut","Delaware",
+        "District of Columbia","Florida","Georgia","Hawaii","Idaho","Illinois","Indiana","Iowa",
+        "Kansas","Kentucky","Louisiana","Maine","Maryland","Massachusetts","Michigan","Minnesota",
+        "Mississippi","Missouri","Montana","Nebraska","Nevada","New Hampshire","New Jersey",
+        "New Mexico","New York","North Carolina","North Dakota","Ohio","Oklahoma","Oregon",
+        "Pennsylvania","Rhode Island","South Carolina","South Dakota","Tennessee","Texas","Utah",
+        "Vermont","Virginia","Washington","West Virginia","Wisconsin","Wyoming"
+    )
+    var selectedState by remember { mutableStateOf("") }
+    var stateMenuExpanded by remember { mutableStateOf(false) }
+
+    // --- Strain Type dropdown (existing) ---
     val strainOptions = listOf("Indica", "Sativa", "Hybrid", "Sativa-hybrid", "Indica-Hybrid")
     var strainType by remember { mutableStateOf("") }
     var strainMenuExpanded by remember { mutableStateOf(false) }
@@ -34,7 +46,7 @@ fun AddProductScreen(navController: NavController, viewModel: HomeViewModel = vi
         uiState.errorMessage?.let {
             snackbarHostState.showSnackbar(it)
             if (it.contains("success", ignoreCase = true)) {
-                navController.popBackStack() // Navigate back after success
+                navController.popBackStack()
             }
             viewModel.clearMessage()
         }
@@ -91,12 +103,38 @@ fun AddProductScreen(navController: NavController, viewModel: HomeViewModel = vi
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
-                OutlinedTextField(
-                    value = state,
-                    onValueChange = { state = it },
-                    label = { Text("State") },
+                // 🆕 State dropdown (replaces free-text)
+                ExposedDropdownMenuBox(
+                    expanded = stateMenuExpanded,
+                    onExpandedChange = { stateMenuExpanded = !stateMenuExpanded },
                     modifier = Modifier.fillMaxWidth()
-                )
+                ) {
+                    OutlinedTextField(
+                        value = selectedState,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("State") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = stateMenuExpanded) },
+                        modifier = Modifier
+                            .menuAnchor()
+                            .fillMaxWidth()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = stateMenuExpanded,
+                        onDismissRequest = { stateMenuExpanded = false }
+                    ) {
+                        stateOptions.forEach { option ->
+                            DropdownMenuItem(
+                                text = { Text(option) },
+                                onClick = {
+                                    selectedState = option
+                                    stateMenuExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // 🆕 Strain Type dropdown
@@ -141,19 +179,19 @@ fun AddProductScreen(navController: NavController, viewModel: HomeViewModel = vi
                             if (name.isNotEmpty() &&
                                 brand.isNotEmpty() &&
                                 category.isNotEmpty() &&
-                                state.isNotEmpty() &&
+                                selectedState.isNotEmpty() &&
                                 strainType.isNotEmpty()
                             ) {
                                 val product = Product(
                                     name = name,
                                     brand = brand,
                                     category = category,
-                                    state = state,
+                                    state = selectedState, // 👈 use dropdown value
                                     strainType = strainType
                                 )
                                 viewModel.addProduct(product)
                             } else {
-                                validationMessage = "Please fill in all fields (including Strain Type)"
+                                validationMessage = "Please fill in all fields (including State and Strain Type)"
                             }
                         },
                         modifier = Modifier.fillMaxWidth()
