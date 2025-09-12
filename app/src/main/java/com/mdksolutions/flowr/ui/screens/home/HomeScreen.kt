@@ -32,6 +32,7 @@ import com.mdksolutions.flowr.viewmodel.HomeViewModel
 import kotlinx.coroutines.delay
 import java.io.BufferedReader
 import com.google.firebase.firestore.FirebaseFirestore
+import androidx.compose.material.icons.filled.Person
 
 // ⬇️ New imports for handling back to exit app
 import androidx.activity.compose.BackHandler
@@ -299,13 +300,23 @@ fun HomeScreen(
     val categories = remember { CATEGORIES }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Flowr") }) },
+        topBar = {
+            TopAppBar(
+                title = { Text("Flowr") },
+                actions = {
+                    IconButton(onClick = { navController.navigate("profile") }) {
+                        Icon(Icons.Filled.Person, contentDescription = "Profile")
+                    }
+                }
+            )
+        },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         floatingActionButton = {
             FloatingActionButton(onClick = { navController.navigate("add_product") }) {
                 Icon(Icons.Default.Add, contentDescription = "Add Product")
             }
         }
+
     ) { padding ->
         Column(
             modifier = Modifier
