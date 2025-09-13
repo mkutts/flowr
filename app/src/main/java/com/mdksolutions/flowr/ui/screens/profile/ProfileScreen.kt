@@ -86,6 +86,7 @@ fun ProfileScreen(navController: NavController, viewModel: ProfileViewModel = vi
                                 PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                             )
                         },
+                        onOpenReviews = { navController.navigate("my_reviews") }, // ⬅️ NEW
                         onRename = { viewModel.updateDisplayName(it) },
                         modifier = Modifier.padding(padding)
                     )
@@ -104,6 +105,7 @@ private fun ProfileContent(
     reviewCount: Int,
     isUploading: Boolean,
     onChangePhoto: () -> Unit,
+    onOpenReviews: () -> Unit,              // ⬅️ NEW
     onRename: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -158,7 +160,10 @@ private fun ProfileContent(
         HorizontalDivider()
 
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            AssistChip(onClick = {}, label = { Text("Reviews: $reviewCount") })
+            AssistChip(
+                onClick = onOpenReviews,                  // ⬅️ NEW
+                label = { Text("Reviews: $reviewCount") }
+            )
         }
 
         HorizontalDivider()

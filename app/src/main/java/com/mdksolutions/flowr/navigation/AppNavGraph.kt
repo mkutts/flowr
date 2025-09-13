@@ -17,6 +17,7 @@ import com.mdksolutions.flowr.ui.screens.productdetail.ProductDetailScreen
 import com.mdksolutions.flowr.ui.screens.profile.ProfileScreen
 import com.mdksolutions.flowr.ui.theme.FlowrTheme
 import com.mdksolutions.flowr.ui.theme.FlowrThemeType
+import com.mdksolutions.flowr.ui.screens.reviews.MyReviewsScreen
 
 @Composable
 fun AppNavGraph(
@@ -62,6 +63,11 @@ fun AppNavGraph(
                 val oobCode = backStackEntry.arguments?.getString("oob")!!
                 ResetPasswordScreen(navController, oobCode)
             }
+
+            composable(route = "my_reviews") {
+                MyReviewsScreen(navController)
+            }
+
         }
     }
 }
