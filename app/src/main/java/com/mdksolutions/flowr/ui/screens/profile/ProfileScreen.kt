@@ -1,5 +1,8 @@
 package com.mdksolutions.flowr.ui.screens.profile
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -23,6 +26,15 @@ import com.mdksolutions.flowr.viewmodel.ProfileViewModel
 @Composable
 fun ProfileScreen(navController: NavController, viewModel: ProfileViewModel = viewModel()) {
     val ui by viewModel.uiState.collectAsState()
+
+    // Android Photo Picker launcher
+    val pickPhotoLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            viewModel.uploadProfilePhoto(uri)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -68,6 +80,12 @@ fun ProfileScreen(navController: NavController, viewModel: ProfileViewModel = vi
                         photoUrl = p.photoUrl,
                         role = p.role,
                         reviewCount = ui.reviewCount,
+                        isUploading = ui.isUploading,
+                        onChangePhoto = {
+                            pickPhotoLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        },
                         onRename = { viewModel.updateDisplayName(it) },
                         modifier = Modifier.padding(padding)
                     )
@@ -84,6 +102,8 @@ private fun ProfileContent(
     photoUrl: String?,
     role: String,
     reviewCount: Int,
+    isUploading: Boolean,
+    onChangePhoto: () -> Unit,
     onRename: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -126,6 +146,14 @@ private fun ProfileContent(
                 }
             }
         }
+
+        // Upload progress
+        if (isUploading) {
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        }
+
+        // Change photo button
+        OutlinedButton(onClick = onChangePhoto) { Text("Change photo") }
 
         HorizontalDivider()
 
