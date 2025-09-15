@@ -14,6 +14,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.mdksolutions.flowr.model.Review
 import com.mdksolutions.flowr.viewmodel.ProductDetailViewModel
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -74,11 +75,12 @@ fun ProductDetailScreen(navController: NavController, productId: String?) {
                 else -> {
                     val product = uiState.product!!
 
-                    // --- NEW: compute averages from the reviews currently loaded ---
+                    // --- compute averages from the reviews currently loaded ---
                     val reviews = uiState.reviews
+
                     val avgThcFromReviews by remember(reviews) {
                         mutableStateOf(
-                            reviews.mapNotNull { it.reportedTHC?.toDouble() }
+                            reviews.mapNotNull { it.reportedTHC }   // removed redundant .toDouble()
                                 .takeIf { it.isNotEmpty() }
                                 ?.average()
                         )
@@ -90,9 +92,10 @@ fun ProductDetailScreen(navController: NavController, productId: String?) {
                                 ?.average()
                         )
                     }
-                    // Format helpers
-                    val avgThcText = avgThcFromReviews?.let { String.format("%.1f%%", it) } ?: "0.0%"
-                    val avgRatingText = avgRatingFromReviews?.let { String.format("%.1f", it) } ?: "0.0"
+
+                    // Format helpers with explicit Locale
+                    val avgThcText = avgThcFromReviews?.let { String.format(Locale.US, "%.1f%%", it) } ?: "0.0%"
+                    val avgRatingText = avgRatingFromReviews?.let { String.format(Locale.US, "%.1f", it) } ?: "0.0"
 
                     Text(text = product.name, style = MaterialTheme.typography.titleLarge)
                     Text(text = "Brand: ${product.brand}")
@@ -113,7 +116,12 @@ fun ProductDetailScreen(navController: NavController, productId: String?) {
                         else -> {
                             LazyColumn {
                                 items(uiState.reviews) { review ->
-                                    ReviewItem(review)
+                                    ReviewItem(
+                                        review = review,
+                                        onOpenProfile = { uid ->
+                                            navController.navigate("public_profile/$uid")
+                                        }
+                                    )
                                 }
                             }
                         }
@@ -125,13 +133,24 @@ fun ProductDetailScreen(navController: NavController, productId: String?) {
 }
 
 @Composable
-fun ReviewItem(review: Review) {
+fun ReviewItem(
+    review: Review,
+    onOpenProfile: (String) -> Unit
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(8.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
+
+            AssistChip(
+                onClick = { onOpenProfile(review.userId) },
+                label = { Text("View reviewer") }
+            )
+
+            Spacer(Modifier.height(8.dp))
+
             Text(text = "Rating: ${review.rating} ⭐")
             Text(text = "Feels: ${review.feels.joinToString(", ")}")
             Text(text = "Activity: ${review.activity}")

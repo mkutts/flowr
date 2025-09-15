@@ -18,6 +18,8 @@ import com.mdksolutions.flowr.ui.screens.profile.ProfileScreen
 import com.mdksolutions.flowr.ui.theme.FlowrTheme
 import com.mdksolutions.flowr.ui.theme.FlowrThemeType
 import com.mdksolutions.flowr.ui.screens.reviews.MyReviewsScreen
+import com.mdksolutions.flowr.ui.screens.profile.PublicProfileScreen
+
 
 @Composable
 fun AppNavGraph(
@@ -66,6 +68,13 @@ fun AppNavGraph(
 
             composable(route = "my_reviews") {
                 MyReviewsScreen(navController)
+            }
+
+            composable(
+                route = "public_profile/{uid}",
+                arguments = listOf(navArgument("uid") { type = NavType.StringType })
+            ) {
+                PublicProfileScreen(navController)
             }
 
         }
