@@ -27,13 +27,10 @@ import com.mdksolutions.flowr.viewmodel.ProfileViewModel
 fun ProfileScreen(navController: NavController, viewModel: ProfileViewModel = viewModel()) {
     val ui by viewModel.uiState.collectAsState()
 
-    // Android Photo Picker launcher
     val pickPhotoLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
-        if (uri != null) {
-            viewModel.uploadProfilePhoto(uri)
-        }
+        if (uri != null) viewModel.uploadProfilePhoto(uri)
     }
 
     Scaffold(
@@ -48,7 +45,7 @@ fun ProfileScreen(navController: NavController, viewModel: ProfileViewModel = vi
                 actions = {
                     IconButton(onClick = {
                         viewModel.signOut()
-                        navController.navigate("auth") { popUpTo(0) } // go to login
+                        navController.navigate("auth") { popUpTo(0) }
                     }) {
                         Icon(Icons.Default.ExitToApp, contentDescription = "Sign out")
                     }
@@ -57,15 +54,11 @@ fun ProfileScreen(navController: NavController, viewModel: ProfileViewModel = vi
         }
     ) { padding ->
         when {
-            ui.isLoading -> {
-                Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
+            ui.isLoading -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
             }
-            ui.error != null -> {
-                Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                    Text(ui.error ?: "Error", color = MaterialTheme.colorScheme.error)
-                }
+            ui.error != null -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                Text(ui.error ?: "Error", color = MaterialTheme.colorScheme.error)
             }
             else -> {
                 val p = ui.profile
@@ -76,7 +69,6 @@ fun ProfileScreen(navController: NavController, viewModel: ProfileViewModel = vi
                 } else {
                     ProfileContent(
                         displayName = p.displayName,
-                        email = p.email,
                         photoUrl = p.photoUrl,
                         role = p.role,
                         reviewCount = ui.reviewCount,
@@ -86,7 +78,7 @@ fun ProfileScreen(navController: NavController, viewModel: ProfileViewModel = vi
                                 PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                             )
                         },
-                        onOpenReviews = { navController.navigate("my_reviews") }, // ⬅️ NEW
+                        onOpenReviews = { navController.navigate("my_reviews") },
                         onRename = { viewModel.updateDisplayName(it) },
                         modifier = Modifier.padding(padding)
                     )
@@ -99,13 +91,12 @@ fun ProfileScreen(navController: NavController, viewModel: ProfileViewModel = vi
 @Composable
 private fun ProfileContent(
     displayName: String,
-    email: String,
     photoUrl: String?,
     role: String,
     reviewCount: Int,
     isUploading: Boolean,
     onChangePhoto: () -> Unit,
-    onOpenReviews: () -> Unit,              // ⬅️ NEW
+    onOpenReviews: () -> Unit,
     onRename: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -142,28 +133,23 @@ private fun ProfileContent(
                     text = displayName.ifBlank { "Unnamed" },
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold)
                 )
-                Text(text = email, style = MaterialTheme.typography.bodyMedium)
+                // Email removed
                 if (role.isNotBlank()) {
                     Text(text = "Role: $role", style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
 
-        // Upload progress
         if (isUploading) {
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         }
 
-        // Change photo button
         OutlinedButton(onClick = onChangePhoto) { Text("Change photo") }
 
         HorizontalDivider()
 
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            AssistChip(
-                onClick = onOpenReviews,                  // ⬅️ NEW
-                label = { Text("Reviews: $reviewCount") }
-            )
+            AssistChip(onClick = onOpenReviews, label = { Text("Reviews: $reviewCount") })
         }
 
         HorizontalDivider()
