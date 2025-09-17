@@ -9,6 +9,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -79,6 +81,7 @@ fun ProfileScreen(navController: NavController, viewModel: ProfileViewModel = vi
                             )
                         },
                         onOpenReviews = { navController.navigate("my_reviews") },
+                        onOpenFollowing = { navController.navigate("following") }, // ⬅️ NEW
                         onRename = { viewModel.updateDisplayName(it) },
                         modifier = Modifier.padding(padding)
                     )
@@ -97,6 +100,7 @@ private fun ProfileContent(
     isUploading: Boolean,
     onChangePhoto: () -> Unit,
     onOpenReviews: () -> Unit,
+    onOpenFollowing: () -> Unit, // ⬅️ NEW
     onRename: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -133,7 +137,6 @@ private fun ProfileContent(
                     text = displayName.ifBlank { "Unnamed" },
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold)
                 )
-                // Email removed
                 if (role.isNotBlank()) {
                     Text(text = "Role: $role", style = MaterialTheme.typography.bodySmall)
                 }
@@ -150,6 +153,7 @@ private fun ProfileContent(
 
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             AssistChip(onClick = onOpenReviews, label = { Text("Reviews: $reviewCount") })
+            AssistChip(onClick = onOpenFollowing, label = { Text("Following") }) // ⬅️ NEW
         }
 
         HorizontalDivider()

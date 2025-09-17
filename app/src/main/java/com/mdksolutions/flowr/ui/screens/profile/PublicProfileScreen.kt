@@ -47,7 +47,6 @@ fun PublicProfileScreen(
                 ui.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 ui.error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(ui.error!!, color = MaterialTheme.colorScheme.error) }
                 else -> {
-                    // Scope the non-null profile so the compiler knows it's safe
                     ui.profile?.let { p ->
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
@@ -84,7 +83,22 @@ fun PublicProfileScreen(
                                         }
                                     }
                                 }
+
                                 Spacer(Modifier.height(8.dp))
+
+                                // Follow / Unfollow button (hidden on your own profile)
+                                if (!ui.isSelf) {
+                                    val following = ui.isFollowing
+                                    val label = if (following) "Unfollow" else "Follow"
+                                    Button(
+                                        enabled = !ui.isBusy,
+                                        onClick = { if (following) vm.unfollow() else vm.follow() }
+                                    ) {
+                                        Text(label)
+                                    }
+                                    Spacer(Modifier.height(8.dp))
+                                }
+
                                 AssistChip(onClick = { /* read-only */ }, label = { Text("Reviews: ${ui.reviewCount}") })
                             }
 

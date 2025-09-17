@@ -19,6 +19,7 @@ import com.mdksolutions.flowr.ui.theme.FlowrTheme
 import com.mdksolutions.flowr.ui.theme.FlowrThemeType
 import com.mdksolutions.flowr.ui.screens.reviews.MyReviewsScreen
 import com.mdksolutions.flowr.ui.screens.profile.PublicProfileScreen
+import com.mdksolutions.flowr.ui.screens.profile.FollowingScreen
 
 
 @Composable
@@ -76,6 +77,11 @@ fun AppNavGraph(
             ) {
                 PublicProfileScreen(navController)
             }
+
+            composable(route = "following") {
+                FollowingScreen(navController)
+            }
+
 
         }
     }
