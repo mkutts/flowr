@@ -9,8 +9,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material.icons.filled.ExitToApp
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -81,7 +79,8 @@ fun ProfileScreen(navController: NavController, viewModel: ProfileViewModel = vi
                             )
                         },
                         onOpenReviews = { navController.navigate("my_reviews") },
-                        onOpenFollowing = { navController.navigate("following") }, // ⬅️ NEW
+                        onOpenFollowing = { navController.navigate("following") },
+                        onOpenWork = { navController.navigate("edit_work") }, // NEW
                         onRename = { viewModel.updateDisplayName(it) },
                         modifier = Modifier.padding(padding)
                     )
@@ -100,7 +99,8 @@ private fun ProfileContent(
     isUploading: Boolean,
     onChangePhoto: () -> Unit,
     onOpenReviews: () -> Unit,
-    onOpenFollowing: () -> Unit, // ⬅️ NEW
+    onOpenFollowing: () -> Unit,
+    onOpenWork: () -> Unit, // NEW
     onRename: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -153,7 +153,10 @@ private fun ProfileContent(
 
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             AssistChip(onClick = onOpenReviews, label = { Text("Reviews: $reviewCount") })
-            AssistChip(onClick = onOpenFollowing, label = { Text("Following") }) // ⬅️ NEW
+            AssistChip(onClick = onOpenFollowing, label = { Text("Following") })
+            if (role.equals("budtender", ignoreCase = true)) {
+                AssistChip(onClick = onOpenWork, label = { Text("Work schedule") }) // NEW
+            }
         }
 
         HorizontalDivider()

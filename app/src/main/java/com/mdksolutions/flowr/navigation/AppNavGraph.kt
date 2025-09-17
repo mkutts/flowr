@@ -20,6 +20,7 @@ import com.mdksolutions.flowr.ui.theme.FlowrThemeType
 import com.mdksolutions.flowr.ui.screens.reviews.MyReviewsScreen
 import com.mdksolutions.flowr.ui.screens.profile.PublicProfileScreen
 import com.mdksolutions.flowr.ui.screens.profile.FollowingScreen
+import com.mdksolutions.flowr.ui.screens.profile.BudtenderWorkEditScreen
 
 
 @Composable
@@ -82,6 +83,9 @@ fun AppNavGraph(
                 FollowingScreen(navController)
             }
 
+            composable(route = "edit_work") {
+                BudtenderWorkEditScreen(navController)
+            }
 
         }
     }
