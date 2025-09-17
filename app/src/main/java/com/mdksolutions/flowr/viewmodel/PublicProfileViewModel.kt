@@ -9,6 +9,7 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.mdksolutions.flowr.model.Product
 import com.mdksolutions.flowr.model.UserProfile
+import com.mdksolutions.flowr.model.BudtenderWork
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -19,13 +20,14 @@ data class PublicProfileUiState(
     val profile: UserProfile? = null,
     val reviewCount: Int = 0,
     val products: List<Product> = emptyList(),
-    val isSelf: Boolean = false,         // NEW
-    val isFollowing: Boolean = false,    // NEW
-    val isBusy: Boolean = false          // NEW
+    val isSelf: Boolean = false,
+    val isFollowing: Boolean = false,
+    val isBusy: Boolean = false,
+    val work: BudtenderWork? = null        // ⬅️ NEW
 )
 
 class PublicProfileViewModel(
-    savedStateHandle: SavedStateHandle   // keep as param (not property) to avoid lint warning
+    savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
     private val db = FirebaseFirestore.getInstance()
@@ -85,13 +87,20 @@ class PublicProfileViewModel(
                     .get().awaitk()
                 val isFollowing = followDoc.exists()
 
+                // 5) ⬅️ NEW: Budtender work doc
+                val workSnap = db.collection("users").document(targetUid)
+                    .collection("work").document("info")
+                    .get().awaitk()
+                val work = if (workSnap.exists()) workSnap.toObject(BudtenderWork::class.java) else null
+
                 _uiState.value = PublicProfileUiState(
                     isLoading = false,
                     profile = profile,
                     reviewCount = count,
                     products = products,
                     isSelf = isSelf,
-                    isFollowing = isFollowing
+                    isFollowing = isFollowing,
+                    work = work
                 )
             } catch (e: Exception) {
                 _uiState.value = PublicProfileUiState(isLoading = false, error = e.message ?: "Failed to load profile")

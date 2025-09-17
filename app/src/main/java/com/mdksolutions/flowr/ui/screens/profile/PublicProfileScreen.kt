@@ -1,5 +1,6 @@
 package com.mdksolutions.flowr.ui.screens.profile
 
+import android.content.Intent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -8,11 +9,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -20,7 +23,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import coil.compose.rememberAsyncImagePainter
 import com.mdksolutions.flowr.model.Product
+import com.mdksolutions.flowr.model.BudtenderWork
+import com.mdksolutions.flowr.model.WEEK_DAYS
 import com.mdksolutions.flowr.viewmodel.PublicProfileViewModel
+import java.net.URLEncoder
+import androidx.core.net.toUri
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -29,6 +36,7 @@ fun PublicProfileScreen(
     vm: PublicProfileViewModel = viewModel()
 ) {
     val ui by vm.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     Scaffold(
         topBar = {
@@ -102,6 +110,16 @@ fun PublicProfileScreen(
                                 AssistChip(onClick = { /* read-only */ }, label = { Text("Reviews: ${ui.reviewCount}") })
                             }
 
+                            // NEW — Work section (if the user has provided work info)
+                            ui.work?.let { work ->
+                                item {
+                                    WorkSection(
+                                        work = work,
+                                        onOpenMaps = { openInMaps(context, work) }
+                                    )
+                                }
+                            }
+
                             if (ui.products.isEmpty()) {
                                 item {
                                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -128,6 +146,62 @@ fun PublicProfileScreen(
             }
         }
     }
+}
+
+@Composable
+private fun WorkSection(work: BudtenderWork, onOpenMaps: () -> Unit) {
+    ElevatedCard {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Work", style = MaterialTheme.typography.titleMedium)
+            if (work.dispensaryName.isNotBlank()) {
+                Text("Dispensary: ${work.dispensaryName}")
+            }
+            if (work.address.isNotBlank()) {
+                Text(work.address, style = MaterialTheme.typography.bodyMedium)
+            }
+            OutlinedButton(onClick = onOpenMaps) { Text("Open in Google Maps") }
+
+            HorizontalDivider(
+                Modifier.padding(vertical = 8.dp),
+                DividerDefaults.Thickness,
+                DividerDefaults.color
+            )
+
+            val hasAnyShift = work.schedule.values.any { it.isNotEmpty() }
+            if (!hasAnyShift) {
+                Text("No schedule provided.")
+            } else {
+                WEEK_DAYS.forEach { day ->
+                    val shifts = work.schedule[day].orEmpty()
+                    if (shifts.isNotEmpty()) {
+                        Text(day.replaceFirstChar { it.uppercase() }, fontWeight = FontWeight.SemiBold)
+                        shifts.forEach { s ->
+                            Text("• ${s.start} – ${s.end}", style = MaterialTheme.typography.bodyMedium)
+                        }
+                        Spacer(Modifier.height(4.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun openInMaps(context: android.content.Context, work: BudtenderWork) {
+    val intent = if (!work.placeId.isNullOrBlank()) {
+        // Prefer Place ID when available
+        Intent(
+            Intent.ACTION_VIEW,
+            "https://www.google.com/maps/search/?api=1&query_place_id=${work.placeId}".toUri()
+        )
+    } else {
+        val query = listOf(work.dispensaryName, work.address)
+            .filter { it.isNotBlank() }
+            .joinToString(" ")
+        val encoded = URLEncoder.encode(query, "UTF-8")
+        Intent(Intent.ACTION_VIEW, "geo:0,0?q=$encoded".toUri())
+    }
+    intent.setPackage("com.google.android.apps.maps")
+    context.startActivity(intent)
 }
 
 @Composable
