@@ -1,5 +1,7 @@
 package com.mdksolutions.flowr.ui.screens.profile
 
+import android.app.TimePickerDialog
+import android.content.Context
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -12,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -143,9 +146,11 @@ private fun DayEditor(
     onAdd: (String, String) -> Unit,
     onRemove: (Int) -> Unit
 ) {
-    // Local drafts for a new shift on this day
-    var start by rememberSaveable(day) { mutableStateOf("") }
-    var end by rememberSaveable(day) { mutableStateOf("") }
+    val context = LocalContext.current
+
+    // Store times as normalized "HH:mm"
+    var start by rememberSaveable(day) { mutableStateOf<String?>(null) }
+    var end by rememberSaveable(day) { mutableStateOf<String?>(null) }
 
     ElevatedCard {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -163,50 +168,83 @@ private fun DayEditor(
                     ) {
                         Text("${s.start} – ${s.end}")
                         IconButton(onClick = { onRemove(index) }) {
-                            Icon(Icons.Default.Delete, contentDescription = "Remove")
+                            Icon(Icons.Filled.Delete, contentDescription = "Remove")
                         }
                     }
                 }
             }
 
-            // Add new shift
+            // Add new shift using clock time pickers
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                OutlinedTextField(
-                    value = start,
-                    onValueChange = { start = it },
-                    label = { Text("Start (HH:mm)") },
-                    singleLine = true,
+                OutlinedButton(
+                    onClick = {
+                        showTimePicker(
+                            context = context,
+                            initial = start
+                        ) { h, m -> start = formatHHmm(h * 60 + m) }
+                    },
                     modifier = Modifier.weight(1f)
-                )
-                OutlinedTextField(
-                    value = end,
-                    onValueChange = { end = it },
-                    label = { Text("End (HH:mm)") },
-                    singleLine = true,
+                ) { Text(start ?: "Start") }
+
+                OutlinedButton(
+                    onClick = {
+                        showTimePicker(
+                            context = context,
+                            initial = end
+                        ) { h, m -> end = formatHHmm(h * 60 + m) }
+                    },
                     modifier = Modifier.weight(1f)
-                )
+                ) { Text(end ?: "End") }
+
+                val canAdd = start != null && end != null &&
+                        parseTimeMinutes(start!!)!! < parseTimeMinutes(end!!)!!
+
                 Button(
                     onClick = {
-                        if (isValidTimeWindow(start, end)) {
-                            onAdd(start.trim(), end.trim())
-                            start = ""
-                            end = ""
-                        }
+                        onAdd(start!!, end!!)
+                        start = null
+                        end = null
                     },
-                    enabled = isValidTimeWindow(start, end)
+                    enabled = canAdd
                 ) { Text("Add") }
             }
         }
     }
 }
 
-private fun isValidTimeWindow(start: String, end: String): Boolean {
-    val rx = Regex("^([01]\\d|2[0-3]):[0-5]\\d$")
-    if (!rx.matches(start.trim()) || !rx.matches(end.trim())) return false
-    fun toMinutes(t: String): Int {
-        val h = t.substring(0, 2).toInt()
-        val m = t.substring(3, 5).toInt()
-        return h * 60 + m
-    }
-    return toMinutes(start.trim()) < toMinutes(end.trim())
+/* ---------- Time helpers ---------- */
+
+private fun showTimePicker(
+    context: Context,
+    initial: String?,
+    is24Hour: Boolean = false, // set to true if you prefer 24-hour clock
+    onSet: (hour: Int, minute: Int) -> Unit
+) {
+    val (initH, initM) = initial
+        ?.let { parseTimeMinutes(it) }
+        ?.let { it / 60 to it % 60 }
+        ?: (9 to 0)
+    TimePickerDialog(
+        context,
+        { _, h, m -> onSet(h, m) },
+        initH,
+        initM,
+        is24Hour
+    ).show()
+}
+
+// Accepts "H:mm" or "HH:mm" and returns minutes since midnight
+private fun parseTimeMinutes(input: String): Int? {
+    val m = Regex("""^\s*(\d{1,2}):(\d{2})\s*$""").matchEntire(input) ?: return null
+    val h = m.groupValues[1].toIntOrNull() ?: return null
+    val min = m.groupValues[2].toIntOrNull() ?: return null
+    if (h !in 0..23 || min !in 0..59) return null
+    return h * 60 + min
+}
+
+// Formats minutes as zero-padded "HH:mm"
+private fun formatHHmm(totalMinutes: Int): String {
+    val h = totalMinutes / 60
+    val m = totalMinutes % 60
+    return String.format("%02d:%02d", h, m)
 }
