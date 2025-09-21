@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -13,6 +14,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -22,21 +26,24 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavController
+import coil.compose.rememberAsyncImagePainter
 import com.mdksolutions.flowr.model.Product
 import com.mdksolutions.flowr.viewmodel.HomeViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.tasks.await
 import java.io.BufferedReader
 import com.google.firebase.firestore.FirebaseFirestore
-import androidx.compose.material.icons.filled.Person
 
 // ⬇️ New imports for handling back to exit app
 import androidx.activity.compose.BackHandler
 import android.app.Activity
+import androidx.compose.material3.HorizontalDivider
 
 /* -------------------- State lists & helpers -------------------- */
 
@@ -66,10 +73,6 @@ private val STATES = listOf("All States") + STATE_PAIRS.map { it.second }
 
 // Categories (unchanged)
 private val CATEGORIES = listOf("Flower", "Edible", "Vape", "Other")
-
-// FEELS/ACTIVITIES kept for now; safe to delete later if unused
-private val FEELS = listOf("Relaxed", "Happy", "Focused")
-private val ACTIVITIES = listOf("Gaming", "Watching TV", "Nature Walk")
 
 // Convert abbreviations or variants to canonical full name
 private fun toStateName(value: String): String {
@@ -213,7 +216,7 @@ private fun AvgThcText(
 ) {
     val db = remember { FirebaseFirestore.getInstance() }
     var avg by remember(productId) {
-        mutableStateOf(initialAvgThc?.takeIf { it > 0 } ?: Double.NaN)
+        mutableDoubleStateOf(initialAvgThc?.takeIf { it > 0 } ?: Double.NaN)
     }
 
     fun numberFromAny(v: Any?): Double? = when (v) {
@@ -274,6 +277,141 @@ private fun AvgThcText(
     Text(text = "Avg THC: $text")
 }
 
+/* -------------------- Public User Search -------------------- */
+
+// Small model for search results
+private data class UserHit(
+    val uid: String,
+    val displayName: String,
+    val handle: String? = null,
+    val photoUrl: String? = null
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun UserSearchBar(navController: NavController) {
+    val db = remember { FirebaseFirestore.getInstance() }
+
+    var query by remember { mutableStateOf("") }
+    var active by remember { mutableStateOf(false) }
+    var results by remember { mutableStateOf(emptyList<UserHit>()) }
+    var isLoading by remember { mutableStateOf(false) }
+
+    LaunchedEffect(query) {
+        val raw = query.trim()
+        if (raw.isEmpty()) {
+            results = emptyList()
+            return@LaunchedEffect
+        }
+        isLoading = true
+
+        val qLower = raw.lowercase()
+        val handleLower = if (raw.startsWith("@")) raw.drop(1).lowercase() else qLower
+
+        suspend fun tryFetchBy(fieldPreferred: String, fieldFallback: String?, textLower: String): List<UserHit> {
+            // 1) Prefer querying a lowercased field (e.g., displayName_lc / handle_lc)
+            val preferred = try {
+                val snap = db.collection("users")
+                    .orderBy(fieldPreferred)
+                    .startAt(textLower)
+                    .endAt(textLower + "\uf8ff")
+                    .limit(15)
+                    .get()
+                    .await()
+                snap.documents.mapNotNull { d ->
+                    val uid = d.id
+                    val name = (d.get("displayName") as? String)?.ifBlank { null } ?: return@mapNotNull null
+                    val handle = (d.get("handle") as? String)?.ifBlank { null }
+                    val photo = (d.get("photoUrl") as? String)?.ifBlank { null }
+                    UserHit(uid, name, handle, photo)
+                }
+            } catch (_: Exception) { emptyList() }
+
+            if (preferred.isNotEmpty()) return preferred
+
+            // 2) Fallback: query the original (case-sensitive) field, then filter client-side by lowercase
+            if (fieldFallback == null) return emptyList()
+            return try {
+                val snap = db.collection("users")
+                    .orderBy(fieldFallback)
+                    .startAt(raw)
+                    .endAt(raw + "\uf8ff")
+                    .limit(25)
+                    .get()
+                    .await()
+                snap.documents.mapNotNull { d ->
+                    val uid = d.id
+                    val name = (d.get("displayName") as? String)?.ifBlank { null } ?: return@mapNotNull null
+                    val handle = (d.get("handle") as? String)?.ifBlank { null }
+                    val photo = (d.get("photoUrl") as? String)?.ifBlank { null }
+                    UserHit(uid, name, handle, photo)
+                }.filter { hit ->
+                    hit.displayName.lowercase().startsWith(textLower) ||
+                            (hit.handle?.lowercase()?.startsWith(textLower) == true)
+                }
+            } catch (_: Exception) { emptyList() }
+        }
+
+        val nameHits = tryFetchBy("displayName_lc", "displayName", qLower)
+        val handleHits = tryFetchBy("handle_lc", "handle", handleLower)
+
+        results = (nameHits + handleHits)
+            .distinctBy { it.uid }
+            .sortedBy { it.displayName.lowercase() }
+
+        isLoading = false
+    }
+
+    DockedSearchBar(
+        query = query,
+        onQueryChange = { query = it },
+        onSearch = { active = true },
+        active = active,
+        onActiveChange = { active = it },
+        placeholder = { Text("Search users by name or @handle") },
+        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+        trailingIcon = {
+            if (query.isNotEmpty()) {
+                IconButton(onClick = { query = "" }) {
+                    Icon(Icons.Filled.Close, contentDescription = "Clear")
+                }
+            }
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+    ) {
+        if (isLoading && results.isEmpty()) {
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        }
+        results.forEach { hit ->
+            ListItem(
+                headlineContent = { Text(hit.displayName, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                supportingContent = { hit.handle?.let { Text("@$it") } },
+                leadingContent = {
+                    if (!hit.photoUrl.isNullOrBlank()) {
+                        Image(
+                            painter = rememberAsyncImagePainter(hit.photoUrl),
+                            contentDescription = null,
+                            modifier = Modifier.size(40.dp).clip(RoundedCornerShape(20.dp))
+                        )
+                    } else {
+                        Icon(imageVector = Icons.Filled.Person, contentDescription = null, modifier = Modifier.size(40.dp))
+                    }
+                },
+                modifier = Modifier.clickable {
+                    navController.navigate("public_profile/${hit.uid}")
+                    results = emptyList(); query = ""; active = false
+                }
+            )
+            HorizontalDivider(Modifier, DividerDefaults.Thickness, DividerDefaults.color)
+        }
+        if (!isLoading && results.isEmpty() && query.isNotBlank()) {
+            Text("No users found", modifier = Modifier.padding(16.dp).fillMaxWidth())
+        }
+    }
+}
+
 /* -------------------- Home Screen -------------------- */
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -301,14 +439,18 @@ fun HomeScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Flowr") },
-                actions = {
-                    IconButton(onClick = { navController.navigate("profile") }) {
-                        Icon(Icons.Filled.Person, contentDescription = "Profile")
+            Column {
+                TopAppBar(
+                    title = { Text("Flowr") },
+                    actions = {
+                        IconButton(onClick = { navController.navigate("profile") }) {
+                            Icon(Icons.Filled.Person, contentDescription = "Profile")
+                        }
                     }
-                }
-            )
+                )
+                // 🔎 Public profile search
+                UserSearchBar(navController = navController)
+            }
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         floatingActionButton = {
