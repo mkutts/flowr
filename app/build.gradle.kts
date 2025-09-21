@@ -69,6 +69,15 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.4")
     implementation("androidx.compose.material:material-icons-extended:<compose_version>")
     implementation("com.google.android.libraries.places:places:3.5.0")
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.ui:ui-text")   // ⬅️ REQUIRED for KeyboardOptions / ImeAction
+    implementation("androidx.compose.material3:material3")
+    implementation(platform("androidx.compose:compose-bom:2024.04.01")) // Use the latest BoM version
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.material3:material3") // Or androidx.compose.material:material
+    implementation("androidx.compose.foundation:foundation") // This includes KeyboardOptions
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    debugImplementation("androidx.compose.ui:ui-tooling")
 
     // ✅ Firebase BOM (pick one BOM version and keep it once; you currently have two below)
     implementation(platform("com.google.firebase:firebase-bom:32.7.1"))

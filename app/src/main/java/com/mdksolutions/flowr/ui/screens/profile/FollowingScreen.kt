@@ -7,12 +7,16 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -20,6 +24,12 @@ import androidx.navigation.NavController
 import coil.compose.rememberAsyncImagePainter
 import com.mdksolutions.flowr.model.UserProfile
 import com.mdksolutions.flowr.viewmodel.FollowingViewModel
+import androidx.compose.foundation.text.KeyboardOptions // <-- Add this import
+import androidx.compose.material3.TextField // Or whatever TextField you are using
+import androidx.compose.runtime.*
+import androidx.compose.ui.text.input.KeyboardType
+
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -28,6 +38,20 @@ fun FollowingScreen(
     vm: FollowingViewModel = viewModel()
 ) {
     val ui by vm.uiState.collectAsStateWithLifecycle()
+
+    // ✅ Search query (saved across config changes)
+    var query by rememberSaveable { mutableStateOf("") }
+
+    // ✅ Filter the in-memory list (case-insensitive)
+    val filtered = remember(query, ui.users) {
+        val q = query.trim()
+        if (q.isEmpty()) ui.users else ui.users.filter { user ->
+            val name = user.displayName.orEmpty()
+            val email = user.email.orEmpty()
+            name.contains(q, ignoreCase = true) ||
+                    email.contains(q, ignoreCase = true)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -41,18 +65,51 @@ fun FollowingScreen(
             )
         }
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            // 🔎 Search bar
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                placeholder = { Text("Search following…") },
+                singleLine = true,
+                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (query.isNotEmpty()) {
+                        IconButton(onClick = { query = "" }) {
+                            Icon(Icons.Filled.Close, contentDescription = "Clear")
+                        }
+                    }
+                },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search)
+            )
+
             when {
-                ui.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-                ui.error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(ui.error!!, color = MaterialTheme.colorScheme.error) }
-                ui.users.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("You’re not following anyone yet.") }
+                ui.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+                ui.error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(ui.error!!, color = MaterialTheme.colorScheme.error)
+                }
+                ui.users.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("You’re not following anyone yet.")
+                }
+                filtered.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("No matches for “$query”.")
+                }
                 else -> {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(12.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(ui.users, key = { it.uid }) { user ->
+                        items(filtered, key = { it.uid }) { user ->
                             FollowingRow(
                                 user = user,
                                 onOpen = { navController.navigate("public_profile/${user.uid}") }
