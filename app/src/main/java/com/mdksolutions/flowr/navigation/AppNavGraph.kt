@@ -17,6 +17,11 @@ import com.mdksolutions.flowr.ui.screens.productdetail.ProductDetailScreen
 import com.mdksolutions.flowr.ui.screens.profile.ProfileScreen
 import com.mdksolutions.flowr.ui.theme.FlowrTheme
 import com.mdksolutions.flowr.ui.theme.FlowrThemeType
+import com.mdksolutions.flowr.ui.screens.reviews.MyReviewsScreen
+import com.mdksolutions.flowr.ui.screens.profile.PublicProfileScreen
+import com.mdksolutions.flowr.ui.screens.profile.FollowingScreen
+import com.mdksolutions.flowr.ui.screens.profile.BudtenderWorkEditScreen
+
 
 @Composable
 fun AppNavGraph(
@@ -62,6 +67,26 @@ fun AppNavGraph(
                 val oobCode = backStackEntry.arguments?.getString("oob")!!
                 ResetPasswordScreen(navController, oobCode)
             }
+
+            composable(route = "my_reviews") {
+                MyReviewsScreen(navController)
+            }
+
+            composable(
+                route = "public_profile/{uid}",
+                arguments = listOf(navArgument("uid") { type = NavType.StringType })
+            ) {
+                PublicProfileScreen(navController)
+            }
+
+            composable(route = "following") {
+                FollowingScreen(navController)
+            }
+
+            composable(route = "edit_work") {
+                BudtenderWorkEditScreen(navController)
+            }
+
         }
     }
 }
