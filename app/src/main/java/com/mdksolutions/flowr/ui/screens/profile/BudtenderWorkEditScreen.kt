@@ -10,6 +10,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -20,9 +21,24 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import com.mdksolutions.flowr.R
 import com.mdksolutions.flowr.model.WEEK_DAYS
 import com.mdksolutions.flowr.model.WorkShift
 import com.mdksolutions.flowr.viewmodel.BudtenderWorkViewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+import java.util.Locale
+
+// Places SDK
+import com.google.android.gms.tasks.Task
+import com.google.android.libraries.places.api.Places
+import com.google.android.libraries.places.api.model.AutocompletePrediction
+import com.google.android.libraries.places.api.model.AutocompleteSessionToken
+import com.google.android.libraries.places.api.model.Place
+import com.google.android.libraries.places.api.net.FetchPlaceRequest
+import com.google.android.libraries.places.api.net.FindAutocompletePredictionsRequest
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -31,17 +47,63 @@ fun BudtenderWorkEditScreen(
     vm: BudtenderWorkViewModel = viewModel()
 ) {
     val ui by vm.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    // One-time Places init using the key in strings.xml
+    val placesClient = remember {
+        if (!Places.isInitialized()) {
+            Places.initialize(context, context.getString(R.string.google_maps_key))
+        }
+        Places.createClient(context)
+    }
+    val sessionToken = remember { AutocompleteSessionToken.newInstance() }
 
     // Draft fields for dispensary info
     var name by rememberSaveable { mutableStateOf("") }
     var address by rememberSaveable { mutableStateOf("") }
     var placeId by rememberSaveable { mutableStateOf("") }
 
+    // Autocomplete UI state
+    var nameQuery by rememberSaveable { mutableStateOf("") }
+    var nameMenuExpanded by remember { mutableStateOf(false) }
+    var predictions by remember { mutableStateOf<List<AutocompletePrediction>>(emptyList()) }
+    var placesError by remember { mutableStateOf<String?>(null) } // NEW
+
     // Keep drafts in sync with loaded data
     LaunchedEffect(ui.work) {
         name = ui.work.dispensaryName
         address = ui.work.address
         placeId = ui.work.placeId.orEmpty()
+        nameQuery = name
+        predictions = emptyList()
+        nameMenuExpanded = false
+        placesError = null
+    }
+
+    // Debounced query to Places (with visible error)
+    LaunchedEffect(nameQuery) {
+        val q = nameQuery.trim()
+        placesError = null
+        if (q.isEmpty()) {
+            predictions = emptyList()
+            nameMenuExpanded = false
+            return@LaunchedEffect
+        }
+        delay(250)
+        try {
+            val req = FindAutocompletePredictionsRequest.builder()
+                .setQuery(q)
+                // .setCountries(listOf("US")) // optional: limit to US
+                .setSessionToken(sessionToken)
+                .build()
+            val result = placesClient.findAutocompletePredictions(req).awaitP()
+            predictions = result.autocompletePredictions
+            nameMenuExpanded = predictions.isNotEmpty()
+        } catch (e: Exception) {
+            placesError = e.localizedMessage ?: e.toString()   // show why suggestions failed
+            predictions = emptyList()
+            nameMenuExpanded = false
+        }
     }
 
     Scaffold(
@@ -83,14 +145,82 @@ fun BudtenderWorkEditScreen(
                 item {
                     Text("Dispensary", style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = name,
-                        onValueChange = { name = it },
-                        label = { Text("Name") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+
+                    // ---------- NAME with Places Autocomplete ----------
+                    ExposedDropdownMenuBox(
+                        expanded = nameMenuExpanded,
+                        onExpandedChange = { expanded ->
+                            nameMenuExpanded = expanded && predictions.isNotEmpty()
+                        }
+                    ) {
+                        OutlinedTextField(
+                            value = nameQuery,
+                            onValueChange = {
+                                nameQuery = it
+                                name = it
+                                // Reset selection state when typing
+                                placeId = ""
+                                if (it.isBlank()) {
+                                    predictions = emptyList()
+                                    nameMenuExpanded = false
+                                } else {
+                                    nameMenuExpanded = predictions.isNotEmpty()
+                                }
+                            },
+                            label = { Text("Name") },
+                            singleLine = true,
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = nameMenuExpanded) },
+                            modifier = Modifier
+                                .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
+                                .fillMaxWidth()
+                        )
+
+                        ExposedDropdownMenu(
+                            expanded = nameMenuExpanded && predictions.isNotEmpty(),
+                            onDismissRequest = { nameMenuExpanded = false }
+                        ) {
+                            predictions.forEach { p ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Text(p.getPrimaryText(null).toString())
+                                            val sec = p.getSecondaryText(null).toString()
+                                            if (sec.isNotBlank()) {
+                                                Text(sec, style = MaterialTheme.typography.bodySmall)
+                                            }
+                                        }
+                                    },
+                                    onClick = {
+                                        nameMenuExpanded = false
+                                        fetchPlaceAndFill(
+                                            placesClient = placesClient,
+                                            placeId = p.placeId,
+                                            onDone = { fullName, fullAddress, id ->
+                                                name = fullName
+                                                nameQuery = fullName
+                                                address = fullAddress.orEmpty()
+                                                placeId = id.orEmpty()
+                                            }
+                                        )
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    // Show why suggestions might be missing (key/restriction issues, etc.)
+                    if (!placesError.isNullOrBlank()) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Places error: $placesError",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+
                     Spacer(Modifier.height(8.dp))
+
+                    // ---------- ADDRESS (auto-filled on selection but editable) ----------
                     OutlinedTextField(
                         value = address,
                         onValueChange = { address = it },
@@ -99,6 +229,8 @@ fun BudtenderWorkEditScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(Modifier.height(8.dp))
+
+                    // ---------- PLACE ID (auto-filled, optional) ----------
                     OutlinedTextField(
                         value = placeId,
                         onValueChange = { placeId = it },
@@ -123,7 +255,6 @@ fun BudtenderWorkEditScreen(
                     )
                 }
 
-                // Error message (if any)
                 if (ui.error != null) {
                     item {
                         Text(
@@ -132,12 +263,13 @@ fun BudtenderWorkEditScreen(
                         )
                     }
                 }
-
                 item { Spacer(Modifier.height(32.dp)) }
             }
         }
     }
 }
+
+/* ------------------------ Day Editor (clock pickers) ------------------------ */
 
 @Composable
 private fun DayEditor(
@@ -147,8 +279,6 @@ private fun DayEditor(
     onRemove: (Int) -> Unit
 ) {
     val context = LocalContext.current
-
-    // Store times as normalized "HH:mm"
     var start by rememberSaveable(day) { mutableStateOf<String?>(null) }
     var end by rememberSaveable(day) { mutableStateOf<String?>(null) }
 
@@ -156,7 +286,6 @@ private fun DayEditor(
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(day.replaceFirstChar { it.uppercase() }, fontWeight = FontWeight.SemiBold)
 
-            // Existing shifts
             if (shifts.isEmpty()) {
                 Text("No shifts", style = MaterialTheme.typography.bodySmall)
             } else {
@@ -174,7 +303,6 @@ private fun DayEditor(
                 }
             }
 
-            // Add new shift using clock time pickers
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 OutlinedButton(
                     onClick = {
@@ -212,12 +340,12 @@ private fun DayEditor(
     }
 }
 
-/* ---------- Time helpers ---------- */
+/* ------------------------ Helpers ------------------------ */
 
 private fun showTimePicker(
     context: Context,
     initial: String?,
-    is24Hour: Boolean = false, // set to true if you prefer 24-hour clock
+    is24Hour: Boolean = false,
     onSet: (hour: Int, minute: Int) -> Unit
 ) {
     val (initH, initM) = initial
@@ -233,7 +361,7 @@ private fun showTimePicker(
     ).show()
 }
 
-// Accepts "H:mm" or "HH:mm" and returns minutes since midnight
+// Accept "H:mm" or "HH:mm"
 private fun parseTimeMinutes(input: String): Int? {
     val m = Regex("""^\s*(\d{1,2}):(\d{2})\s*$""").matchEntire(input) ?: return null
     val h = m.groupValues[1].toIntOrNull() ?: return null
@@ -246,5 +374,32 @@ private fun parseTimeMinutes(input: String): Int? {
 private fun formatHHmm(totalMinutes: Int): String {
     val h = totalMinutes / 60
     val m = totalMinutes % 60
-    return String.format("%02d:%02d", h, m)
+    return String.format(Locale.US, "%02d:%02d", h, m)
+}
+
+// Await wrapper with a distinct name to avoid conflicts with your awaitk()
+private suspend fun <T> Task<T>.awaitP(): T = suspendCancellableCoroutine { cont ->
+    addOnCompleteListener { task ->
+        if (task.isSuccessful) cont.resume(task.result)
+        else cont.resumeWithException(task.exception ?: RuntimeException("Task failed"))
+    }
+}
+
+// Fetch place details and pass back name/address/id
+private fun fetchPlaceAndFill(
+    placesClient: com.google.android.libraries.places.api.net.PlacesClient,
+    placeId: String,
+    onDone: (name: String, address: String?, id: String?) -> Unit
+) {
+    val req = FetchPlaceRequest.builder(
+        placeId,
+        listOf(Place.Field.ID, Place.Field.NAME, Place.Field.ADDRESS)
+    ).build()
+    placesClient.fetchPlace(req).addOnSuccessListener { resp ->
+        val p = resp.place
+        onDone(p.name ?: "", p.address, p.id)
+    }.addOnFailureListener {
+        // Fallback: still return the id we clicked
+        onDone("", null, placeId)
+    }
 }

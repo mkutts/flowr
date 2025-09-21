@@ -1,6 +1,7 @@
 package com.mdksolutions.flowr.ui.screens.profile
 
 import android.content.Intent
+import android.content.ActivityNotFoundException // ⬅️ NEW
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -110,7 +111,7 @@ fun PublicProfileScreen(
                                 AssistChip(onClick = { /* read-only */ }, label = { Text("Reviews: ${ui.reviewCount}") })
                             }
 
-                            // NEW — Work section (if the user has provided work info)
+                            // Work section (if the user has provided work info)
                             ui.work?.let { work ->
                                 item {
                                     WorkSection(
@@ -188,20 +189,32 @@ private fun WorkSection(work: BudtenderWork, onOpenMaps: () -> Unit) {
 
 private fun openInMaps(context: android.content.Context, work: BudtenderWork) {
     val intent = if (!work.placeId.isNullOrBlank()) {
-        // Prefer Place ID when available
-        Intent(
-            Intent.ACTION_VIEW,
-            "https://www.google.com/maps/search/?api=1&query_place_id=${work.placeId}".toUri()
-        )
+        // Prefer Place ID and include a label for reliability across devices
+        val label = (work.dispensaryName.ifBlank { null } ?: work.address.ifBlank { null }) ?: "Location"
+        val url = "https://www.google.com/maps/search/?" +
+                "api=1&query=${URLEncoder.encode(label, "UTF-8")}" +
+                "&query_place_id=${URLEncoder.encode(work.placeId, "UTF-8")}"
+        Intent(Intent.ACTION_VIEW, url.toUri()).apply {
+            setPackage("com.google.android.apps.maps")
+        }
     } else {
+        // Fallback: address/name query
         val query = listOf(work.dispensaryName, work.address)
             .filter { it.isNotBlank() }
             .joinToString(" ")
         val encoded = URLEncoder.encode(query, "UTF-8")
-        Intent(Intent.ACTION_VIEW, "geo:0,0?q=$encoded".toUri())
+        Intent(Intent.ACTION_VIEW, "geo:0,0?q=$encoded".toUri()).apply {
+            setPackage("com.google.android.apps.maps")
+        }
     }
-    intent.setPackage("com.google.android.apps.maps")
-    context.startActivity(intent)
+
+    try {
+        context.startActivity(intent)
+    } catch (_: ActivityNotFoundException) {
+        // If Maps app isn't installed, open in any browser
+        intent.setPackage(null)
+        context.startActivity(intent)
+    }
 }
 
 @Composable

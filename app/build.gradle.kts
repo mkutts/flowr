@@ -68,6 +68,7 @@ dependencies {
     implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.4")
     implementation("androidx.compose.material:material-icons-extended:<compose_version>")
+    implementation("com.google.android.libraries.places:places:3.5.0")
 
     // ✅ Firebase BOM (pick one BOM version and keep it once; you currently have two below)
     implementation(platform("com.google.firebase:firebase-bom:32.7.1"))
