@@ -39,6 +39,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.tasks.await
 import java.io.BufferedReader
 import com.google.firebase.firestore.FirebaseFirestore
+// add:
+import java.util.Locale
+import androidx.compose.material3.MenuAnchorType
+
 
 // ⬇️ New imports for handling back to exit app
 import androidx.activity.compose.BackHandler
@@ -273,7 +277,7 @@ private fun AvgThcText(
             }
     }
 
-    val text = if (avg.isFinite()) String.format("%.1f%%", avg) else "—"
+    val text = if (avg.isFinite()) String.format(Locale.US, "%.1f%%", avg) else "—"
     Text(text = "Avg THC: $text")
 }
 
@@ -521,7 +525,7 @@ fun HomeScreen(
                         trailingIcon = {
                             ExposedDropdownMenuDefaults.TrailingIcon(expanded = stateMenuExpanded)
                         },
-                        modifier = Modifier.menuAnchor().fillMaxWidth()
+                        modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth()
                     )
                     ExposedDropdownMenu(
                         expanded = stateMenuExpanded,
@@ -619,7 +623,7 @@ fun HomeScreen(
                         },
                         singleLine = true,
                         modifier = Modifier
-                            .menuAnchor()
+                            .menuAnchor(MenuAnchorType.PrimaryEditable)
                             .fillMaxWidth()
                     )
 
@@ -700,7 +704,7 @@ fun HomeScreen(
                         },
                         singleLine = true,
                         modifier = Modifier
-                            .menuAnchor()
+                            .menuAnchor(MenuAnchorType.PrimaryEditable)
                             .fillMaxWidth()
                     )
 
