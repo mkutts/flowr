@@ -9,6 +9,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -67,6 +68,12 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
     var activity by rememberSaveable { mutableStateOf("") }
     var thc by rememberSaveable { mutableStateOf("") }
 
+    // ✅ NEW: free-text review state
+    var reviewText by rememberSaveable { mutableStateOf("") }
+    val reviewCharLimit = 2000
+    val minCharsToSubmit = 12
+    val remainingChars = reviewCharLimit - reviewText.length
+
     val context = LocalContext.current
 
     // ===== Feels dict: base (assets) + custom (prefs)
@@ -98,9 +105,7 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
             }
             activities = (baseActivities + customActivities).distinct().sorted()
         } catch (e: Exception) {
-            // If you don't have activities.json yet, this will keep the list empty and still work.
-            // Uncomment to notify:
-            // snackbarHostState.showSnackbar("Couldn't load activity list: ${e.message ?: "Unknown error"}")
+            // If you don't have activities.json yet, keep the list empty and still work.
             activities = customActivities.distinct().sorted()
         }
     }
@@ -168,7 +173,10 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
                 value = rating,
                 onValueChange = { rating = it },
                 label = { Text("Rating (1-5)") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Number,
+                    imeAction = ImeAction.Next
+                ),
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(modifier = Modifier.height(8.dp))
@@ -187,6 +195,7 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
                         feelsExpanded = currentFeelsToken.isNotBlank() && feelSuggestions.isNotEmpty()
                     },
                     label = { Text("Feels (comma separated)") },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                     modifier = Modifier
                         .menuAnchor()
                         .fillMaxWidth()
@@ -238,6 +247,7 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
                         activityExpanded = activity.isNotBlank() && activitySuggestions.isNotEmpty()
                     },
                     label = { Text("Makes me want to...") },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                     modifier = Modifier
                         .menuAnchor()
                         .fillMaxWidth()
@@ -265,9 +275,37 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
                 value = thc,
                 onValueChange = { thc = it },
                 label = { Text("Reported THC (%) - Optional") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Number,
+                    imeAction = ImeAction.Next
+                ),
                 modifier = Modifier.fillMaxWidth()
             )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // ✅ NEW: Free-text review box
+            OutlinedTextField(
+                value = reviewText,
+                onValueChange = { new ->
+                    reviewText = if (new.length <= reviewCharLimit) new else new.take(reviewCharLimit)
+                },
+                label = { Text("Your words") },
+                placeholder = { Text("Tell others what you liked, effects, taste, and any caveats…") },
+                supportingText = {
+                    val tooShort = reviewText.trim().length in 1 until minCharsToSubmit
+                    val msg = when {
+                        reviewText.isBlank() -> "Optional, but helpful."
+                        tooShort -> "A few more words makes this useful (min $minCharsToSubmit chars)."
+                        else -> "$remainingChars characters left"
+                    }
+                    Text(msg)
+                },
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 5,
+                maxLines = 12
+            )
+
             Spacer(modifier = Modifier.height(16.dp))
 
             if (uiState.isSubmittingReview) {
@@ -295,6 +333,12 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
                         }
                         if (activity.isBlank()) {
                             validationMessage = "Please fill in the activity"
+                            return@Button
+                        }
+                        // Soft-require meaningful text if they started typing
+                        val cleanedReviewText = reviewText.trim()
+                        if (cleanedReviewText.isNotEmpty() && cleanedReviewText.length < minCharsToSubmit) {
+                            validationMessage = "Please add a bit more detail to your review"
                             return@Button
                         }
 
@@ -328,7 +372,9 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
                                 rating = ratingVal,
                                 feels = feelsList,
                                 activity = activity,
-                                reportedTHC = thc.toDoubleOrNull()
+                                reportedTHC = thc.toDoubleOrNull(),
+                                // ✅ NEW field – add `val reviewText: String? = null` to your data class if missing
+                                reviewText = cleanedReviewText.ifEmpty { null }
                             )
 
                             viewModel.addReview(review)
