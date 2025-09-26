@@ -80,7 +80,7 @@ fun ProductDetailScreen(navController: NavController, productId: String?) {
 
                     val avgThcFromReviews by remember(reviews) {
                         mutableStateOf(
-                            reviews.mapNotNull { it.reportedTHC }   // removed redundant .toDouble()
+                            reviews.mapNotNull { it.reportedTHC }
                                 .takeIf { it.isNotEmpty() }
                                 ?.average()
                         )
@@ -156,6 +156,15 @@ fun ReviewItem(
             Text(text = "Activity: ${review.activity}")
             review.reportedTHC?.let {
                 Text(text = "Reported THC: $it%")
+            }
+
+            // ✅ NEW: Show user's own words if provided
+            if (!review.reviewText.isNullOrBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = review.reviewText,
+                    style = MaterialTheme.typography.bodyMedium
+                )
             }
         }
     }
