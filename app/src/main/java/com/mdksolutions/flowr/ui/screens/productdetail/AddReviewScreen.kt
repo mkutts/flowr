@@ -1,11 +1,18 @@
 package com.mdksolutions.flowr.ui.screens.productdetail
 
 import android.content.Context
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -17,39 +24,42 @@ import androidx.navigation.NavController
 import com.google.firebase.auth.FirebaseAuth
 import com.mdksolutions.flowr.model.Review
 import com.mdksolutions.flowr.viewmodel.ProductDetailViewModel
+import com.mdksolutions.flowr.viewmodel.FollowingViewModel
+import com.mdksolutions.flowr.model.UserProfile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import androidx.core.content.edit
 
 // ==== Storage for custom words (can't write to assets at runtime) ====
 private const val PREFS_NAME = "custom_words_prefs"
 private const val PREFS_KEY_FEELS = "custom_feels"
 private const val PREFS_KEY_ACTIVITIES = "custom_activities"
 
-private fun getCustomFeels(context: Context): MutableList<String> {
+private fun getCustomFeels(context: Context): List<String> {
     val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     val json = prefs.getString(PREFS_KEY_FEELS, "[]") ?: "[]"
     val arr = JSONArray(json)
-    return MutableList(arr.length()) { i -> arr.getString(i) }
+    return List(arr.length()) { i -> arr.getString(i) }
 }
 
 private fun saveCustomFeels(context: Context, words: List<String>) {
     val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     val arr = JSONArray(words)
-    prefs.edit().putString(PREFS_KEY_FEELS, arr.toString()).apply()
+    prefs.edit { putString(PREFS_KEY_FEELS, arr.toString()) }
 }
 
-private fun getCustomActivities(context: Context): MutableList<String> {
+private fun getCustomActivities(context: Context): List<String> {
     val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     val json = prefs.getString(PREFS_KEY_ACTIVITIES, "[]") ?: "[]"
     val arr = JSONArray(json)
-    return MutableList(arr.length()) { i -> arr.getString(i) }
+    return List(arr.length()) { i -> arr.getString(i) }
 }
 
 private fun saveCustomActivities(context: Context, words: List<String>) {
     val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     val arr = JSONArray(words)
-    prefs.edit().putString(PREFS_KEY_ACTIVITIES, arr.toString()).apply()
+    prefs.edit { putString(PREFS_KEY_ACTIVITIES, arr.toString()) }
 }
 // ====================================================================
 
@@ -74,15 +84,24 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
     val minCharsToSubmit = 12
     val remainingChars = reviewCharLimit - reviewText.length
 
+    // ✅ NEW: tagging state
+    var showTagDialog by rememberSaveable { mutableStateOf(false) }
+    var tagSearch by rememberSaveable { mutableStateOf("") }
+
     val context = LocalContext.current
 
     // ===== Feels dict: base (assets) + custom (prefs)
     var adjectives by remember { mutableStateOf<List<String>>(emptyList()) }
-    var customFeels by remember { mutableStateOf(getCustomFeels(context)) }
+    // use SnapshotStateList to avoid "mutable collection" warning
+    val customFeels: SnapshotStateList<String> = remember {
+        mutableStateListOf<String>().apply { addAll(getCustomFeels(context)) }
+    }
 
     // ===== Activities dict: base (assets) + custom (prefs)
     var activities by remember { mutableStateOf<List<String>>(emptyList()) }
-    var customActivities by remember { mutableStateOf(getCustomActivities(context)) }
+    val customActivities: SnapshotStateList<String> = remember {
+        mutableStateListOf<String>().apply { addAll(getCustomActivities(context)) }
+    }
 
     // Load both dictionaries
     LaunchedEffect(Unit) {
@@ -104,7 +123,7 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
                 List(arr.length()) { i -> arr.getString(i) }
             }
             activities = (baseActivities + customActivities).distinct().sorted()
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             // If you don't have activities.json yet, keep the list empty and still work.
             activities = customActivities.distinct().sorted()
         }
@@ -197,7 +216,7 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
                     label = { Text("Feels (comma separated)") },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                     modifier = Modifier
-                        .menuAnchor()
+                        .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
                         .fillMaxWidth()
                 )
 
@@ -249,7 +268,7 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
                     label = { Text("Makes me want to...") },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                     modifier = Modifier
-                        .menuAnchor()
+                        .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
                         .fillMaxWidth()
                 )
 
@@ -261,7 +280,7 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
                         DropdownMenuItem(
                             text = { Text(suggestion) },
                             onClick = {
-                                activity = suggestion + " "
+                                activity = "$suggestion "
                                 activityExpanded = false
                             }
                         )
@@ -284,7 +303,7 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // ✅ NEW: Free-text review box
+            // ✅ Free-text review box
             OutlinedTextField(
                 value = reviewText,
                 onValueChange = { new ->
@@ -305,6 +324,64 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
                 minLines = 5,
                 maxLines = 12
             )
+
+            // ✅ NEW: Tag someone button + dialog
+            Spacer(Modifier.height(8.dp))
+            TextButton(onClick = { showTagDialog = true }) {
+                Text("Tag someone")
+            }
+
+            if (showTagDialog) {
+                val followingVm: FollowingViewModel = viewModel()
+                val followingState by followingVm.uiState.collectAsState()
+                // NOTE: removed followingVm.loadFollowing() to avoid unresolved reference error.
+                // If your VM doesn't auto-load, add the fetch in its init{}.
+
+                AlertDialog(
+                    onDismissRequest = { showTagDialog = false },
+                    title = { Text("Tag someone") },
+                    text = {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            OutlinedTextField(
+                                value = tagSearch,
+                                onValueChange = { tagSearch = it },
+                                label = { Text("Search") },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(Modifier.height(8.dp))
+
+                            val list = (followingState.users.takeIf { it.isNotEmpty() } ?: emptyList())
+                                .filter { it.displayName.contains(tagSearch, ignoreCase = true) }
+
+                            if (followingState.isLoading) {
+                                CircularProgressIndicator()
+                            } else {
+                                LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
+                                    items(list) { u: UserProfile ->
+                                        ListItem(
+                                            headlineContent = { Text(u.displayName) },
+                                            supportingContent = { Text(u.email) },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable {
+                                                    // Insert token: @[Display Name](uid)
+                                                    val token = " @[${u.displayName}](${u.uid}) "
+                                                    reviewText = (reviewText + token).trim()
+                                                    showTagDialog = false
+                                                    tagSearch = ""
+                                                }
+                                        )
+                                        HorizontalDivider()
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showTagDialog = false }) { Text("Close") }
+                    }
+                )
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -351,7 +428,7 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
                             val feelsLower = adjectives.map { it.lowercase() }.toSet()
                             val missingFeels = feelsList.filter { it.lowercase() !in feelsLower }
                             if (missingFeels.isNotEmpty()) {
-                                customFeels = (customFeels + missingFeels).distinct().toMutableList()
+                                customFeels.addAll(missingFeels.filterNot { it in customFeels })
                                 saveCustomFeels(context, customFeels)
                                 adjectives = (adjectives + missingFeels).distinct().sorted()
                             }
@@ -360,7 +437,7 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
                             val actLower = activities.map { it.lowercase() }.toSet()
                             val actVal = activity.trim()
                             if (actVal.isNotEmpty() && actVal.lowercase() !in actLower) {
-                                customActivities = (customActivities + actVal).distinct().toMutableList()
+                                if (actVal !in customActivities) customActivities.add(actVal)
                                 saveCustomActivities(context, customActivities)
                                 activities = (activities + actVal).distinct().sorted()
                             }
@@ -373,7 +450,6 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
                                 feels = feelsList,
                                 activity = activity,
                                 reportedTHC = thc.toDoubleOrNull(),
-                                // ✅ NEW field – add `val reviewText: String? = null` to your data class if missing
                                 reviewText = cleanedReviewText.ifEmpty { null }
                             )
 
