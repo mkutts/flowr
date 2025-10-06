@@ -9,5 +9,7 @@ data class Review(
     val feels: List<String> = emptyList(),  // ["Happy", "Relaxed"]
     val activity: String = "",             // "Makes me want to..."
     val reportedTHC: Double? = null,       // Optional
+    // NEW: optional free-text body
+    val reviewText: String? = null,
     val createdAt: Long = System.currentTimeMillis()
 )

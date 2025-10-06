@@ -1,14 +1,21 @@
 package com.mdksolutions.flowr.ui.screens.productdetail
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
@@ -80,7 +87,7 @@ fun ProductDetailScreen(navController: NavController, productId: String?) {
 
                     val avgThcFromReviews by remember(reviews) {
                         mutableStateOf(
-                            reviews.mapNotNull { it.reportedTHC }   // removed redundant .toDouble()
+                            reviews.mapNotNull { it.reportedTHC }
                                 .takeIf { it.isNotEmpty() }
                                 ?.average()
                         )
@@ -142,8 +149,11 @@ fun ReviewItem(
             .fillMaxWidth()
             .padding(8.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-
+        Column(
+            modifier = Modifier
+                .padding(16.dp)
+                .animateContentSize()
+        ) {
             AssistChip(
                 onClick = { onOpenProfile(review.userId) },
                 label = { Text("View reviewer") }
@@ -157,6 +167,115 @@ fun ReviewItem(
             review.reportedTHC?.let {
                 Text(text = "Reported THC: $it%")
             }
+
+            // ✅ Free-text body with Read more / Read less + clickable @mentions
+            if (!review.reviewText.isNullOrBlank()) {
+                Spacer(Modifier.height(8.dp))
+
+                var expanded by remember(review.id) { mutableStateOf(false) }
+                val previewMaxLines = 3
+                val body = review.reviewText
+
+                // Use the same heuristic for whether to show the "Read more" affordance
+                val showToggle = body.lineCountWouldExceed(previewMaxLines)
+
+                // Approximate a preview by characters; if not expanded, show truncated text with ellipsis
+                val approxCharsPerLine = 90
+                val previewChars = previewMaxLines * approxCharsPerLine
+                val displayText =
+                    if (expanded || body.length <= previewChars) body
+                    else body.take(previewChars).trimEnd() + "…"
+
+                MentionText(
+                    text = displayText,
+                    onMentionClick = { uid -> onOpenProfile(uid) },
+                )
+
+                if (showToggle) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        if (!expanded) {
+                            TextButton(onClick = { expanded = true }) { Text("Read more") }
+                        } else {
+                            TextButton(onClick = { expanded = false }) { Text("Read less") }
+                        }
+                    }
+                }
+            }
         }
     }
+}
+
+/**
+ * Renders @[Display Name](uid) tokens as clickable @Display Name that invoke onMentionClick(uid)
+ */
+@Composable
+private fun MentionText(
+    text: String,
+    onMentionClick: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // ✅ read composable state (colors) outside remember
+    val linkColor = MaterialTheme.colorScheme.primary
+
+    // Token format: @[Display Name](uid) — no redundant escape for ']'
+    val mentionRegex = remember { Regex("@\\[(.+?)]\\((.+?)\\)") }
+
+    val annotated: AnnotatedString = remember(text, linkColor) {
+        buildAnnotatedString {
+            var idx = 0
+            for (m in mentionRegex.findAll(text)) {
+                val range = m.range
+                // append plain text before the mention
+                if (range.first > idx) append(text.substring(idx, range.first))
+
+                val display = m.groupValues[1]
+                val uid = m.groupValues[2]
+
+                val start = length
+                withStyle(
+                    style = SpanStyle(
+                        color = linkColor,
+                        textDecoration = TextDecoration.Underline
+                    )
+                ) {
+                    append("@")
+                    append(display)
+                }
+                addStringAnnotation(
+                    tag = "MENTION",
+                    annotation = uid,
+                    start = start,
+                    end = start + display.length + 1 // +1 for '@'
+                )
+
+                idx = range.last + 1
+            }
+            if (idx < text.length) append(text.substring(idx))
+        }
+    }
+
+    @Suppress("DEPRECATION") // ClickableText is deprecated; can migrate to LinkAnnotation if you prefer
+    ClickableText(
+        text = annotated,
+        style = MaterialTheme.typography.bodyMedium,
+        modifier = modifier
+    ) { offset ->
+        annotated.getStringAnnotations(tag = "MENTION", start = offset, end = offset)
+            .firstOrNull()
+            ?.let { onMentionClick(it.item) }
+    }
+}
+
+/**
+ * Lightweight heuristic to decide whether we should show a “Read more” link.
+ * We can’t measure layout here, so we approximate:
+ * - If the text length is large enough, assume it will exceed N lines in most devices.
+ * - Tuned so typical ~70–90 chars/line at body text will need ~3 lines past ~300 chars.
+ */
+private fun String.lineCountWouldExceed(maxPreviewLines: Int): Boolean {
+    val approxCharsPerLine = 90 // conservative for body text on phones
+    return length > maxPreviewLines * approxCharsPerLine
 }
