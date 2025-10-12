@@ -10,9 +10,12 @@ import com.google.firebase.firestore.IgnoreExtraProperties
  */
 data class UserProfile(
     val uid: String = "",
+    val username: String = "",          // NEW
+    val usernameLower: String = "",     // NEW (for case-insensitive lookups)
     val displayName: String = "",
     val email: String = "",
     val photoUrl: String? = null,
-    val role: String = "user",         // "user" | "budtender" | "influencer" (future)
+    val role: String = "user",
     val createdAt: Long = System.currentTimeMillis()
 )
+
