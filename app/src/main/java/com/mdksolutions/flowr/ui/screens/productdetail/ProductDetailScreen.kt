@@ -23,12 +23,21 @@ import com.mdksolutions.flowr.model.Review
 import com.mdksolutions.flowr.viewmodel.ProductDetailViewModel
 import java.util.Locale
 
+// PATCH: imports for editing UI
+import com.google.firebase.auth.FirebaseAuth
+import androidx.compose.material3.Slider
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProductDetailScreen(navController: NavController, productId: String?) {
     val viewModel: ProductDetailViewModel = viewModel()
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // PATCH: current user id for author checks
+    val currentUserId = FirebaseAuth.getInstance().currentUser?.uid
 
     // Load product and reviews on first composition
     LaunchedEffect(productId) {
@@ -123,12 +132,70 @@ fun ProductDetailScreen(navController: NavController, productId: String?) {
                         else -> {
                             LazyColumn {
                                 items(uiState.reviews) { review ->
-                                    ReviewItem(
-                                        review = review,
-                                        onOpenProfile = { uid ->
-                                            navController.navigate("public_profile/$uid")
+                                    val isEditing = uiState.editingReviewId == review.id
+
+                                    if (isEditing) {
+                                        // EDIT MODE
+                                        OutlinedTextField(
+                                            value = uiState.editedText,
+                                            onValueChange = { viewModel.setEditedText(it) },
+                                            label = { Text("Edit your review") },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text)
+                                        )
+
+                                        Spacer(Modifier.height(8.dp))
+
+                                        // Force rating to stay within 1..5 to satisfy Firestore rules
+                                        Slider(
+                                            value = uiState.editedRating.coerceIn(1f, 5f),
+                                            onValueChange = { viewModel.setEditedRating(it.coerceIn(1f, 5f)) },
+                                            valueRange = 1f..5f,
+                                            steps = 3
+                                        )
+                                        Text(text = "Rating: ${"%.1f".format(uiState.editedRating.coerceIn(1f, 5f))}")
+
+                                        Spacer(Modifier.height(8.dp))
+
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Button(
+                                                enabled = !uiState.isSavingEdit,
+                                                onClick = { viewModel.updateReview() } // uses product + review in uiState
+                                            ) {
+                                                Text(if (uiState.isSavingEdit) "Saving..." else "Save")
+                                            }
+                                            Spacer(Modifier.width(8.dp))
+                                            TextButton(
+                                                enabled = !uiState.isSavingEdit,
+                                                onClick = { viewModel.cancelEditingReview() }
+                                            ) {
+                                                Text("Cancel")
+                                            }
                                         }
-                                    )
+                                    } else {
+                                        // READ-ONLY (your existing card)
+                                        ReviewItem(
+                                            review = review,
+                                            onOpenProfile = { uid ->
+                                                navController.navigate("public_profile/$uid")
+                                            }
+                                        )
+
+                                        // Only show Edit for the author
+                                        if (review.userId == currentUserId) {
+                                            TextButton(
+                                                onClick = {
+                                                    viewModel.startEditingReview(
+                                                        reviewId = review.id,
+                                                        currentText = review.reviewText ?: "",
+                                                        currentRating = review.rating
+                                                    )
+                                                }
+                                            ) { Text("Edit") }
+                                        }
+                                    }
+
+                                    Spacer(Modifier.height(16.dp))
                                 }
                             }
                         }

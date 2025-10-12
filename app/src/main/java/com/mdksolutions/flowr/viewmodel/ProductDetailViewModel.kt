@@ -3,13 +3,14 @@ package com.mdksolutions.flowr.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.ktx.toObject   // ✅ KTX mapper
+import com.google.firebase.firestore.toObject   // ✅ current extension
 import com.mdksolutions.flowr.model.Product
 import com.mdksolutions.flowr.model.Review
 import com.mdksolutions.flowr.repository.ReviewRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class ProductDetailUiState(
@@ -19,7 +20,13 @@ data class ProductDetailUiState(
     val reviewAdded: Boolean = false,        // ✅ NEW
     val product: Product? = null,
     val reviews: List<Review> = emptyList(),
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+
+    // ✅ PATCH: fields for editing an existing review
+    val editingReviewId: String? = null,
+    val editedText: String = "",
+    val editedRating: Float = 0f,
+    val isSavingEdit: Boolean = false
 )
 
 class ProductDetailViewModel : ViewModel() {
@@ -69,7 +76,7 @@ class ProductDetailViewModel : ViewModel() {
                         reviews = reviewList
                     )
                 }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoadingReviews = false,
                     errorMessage = "Failed to load reviews"
@@ -110,8 +117,8 @@ class ProductDetailViewModel : ViewModel() {
         db.runTransaction { transaction ->
             val snapshot = transaction.get(productRef)
             if (snapshot.exists()) {
-                val currentFeels = snapshot.get("topFeels") as? List<String> ?: emptyList()
-                val currentActivities = snapshot.get("topActivities") as? List<String> ?: emptyList()
+                val currentFeels = (snapshot.get("topFeels") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+                val currentActivities = (snapshot.get("topActivities") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
 
                 val updatedFeels = (currentFeels + feels).groupingBy { it }
                     .eachCount()
@@ -141,5 +148,159 @@ class ProductDetailViewModel : ViewModel() {
 
     fun clearReviewAdded() {
         _uiState.value = _uiState.value.copy(reviewAdded = false)
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // ✅ PATCH: Editing workflow
+    // ─────────────────────────────────────────────────────────────
+
+    /** Begin editing a specific review */
+    fun startEditingReview(reviewId: String, currentText: String, currentRating: Int) {
+        _uiState.update {
+            it.copy(
+                editingReviewId = reviewId,
+                editedText = currentText,
+                editedRating = currentRating.toFloat(),
+                errorMessage = null
+            )
+        }
+    }
+
+    /** Update the draft text while editing */
+    fun setEditedText(text: String) {
+        _uiState.update { it.copy(editedText = text) }
+    }
+
+    /** Update the draft rating while editing */
+    fun setEditedRating(rating: Float) {
+        _uiState.update { it.copy(editedRating = rating) }
+    }
+
+    /** Cancel editing and clear draft */
+    fun cancelEditingReview() {
+        _uiState.update {
+            it.copy(
+                editingReviewId = null,
+                editedText = "",
+                editedRating = 0f,
+                isSavingEdit = false
+            )
+        }
+    }
+
+    /**
+     * Save the review edit.
+     * Assumes reviews are stored under: /products/{productId}/reviews/{reviewId}
+     * (If you also keep top-level /reviews, mirror this call as needed.)
+     */
+    fun updateReview(
+        onSuccess: () -> Unit = {},
+        onError: (Throwable) -> Unit = {}
+    ) {
+        val state = _uiState.value
+        val productId = state.product?.id
+        val reviewId = state.editingReviewId
+        val newText = state.editedText
+        val newRating = state.editedRating.coerceIn(1f, 5f) // clamp to match rules
+
+        if (productId.isNullOrBlank() || reviewId.isNullOrBlank()) {
+            _uiState.update { it.copy(errorMessage = "Invalid product or review to update.") }
+            return
+        }
+
+        val authUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+        if (authUid == null) {
+            _uiState.update { it.copy(errorMessage = "Not signed in.") }
+            return
+        }
+
+        val subRef = db.collection("products").document(productId)
+            .collection("reviews").document(reviewId)
+        val topRef = db.collection("reviews").document(reviewId)
+
+        _uiState.update { it.copy(isSavingEdit = true, errorMessage = null) }
+
+        // Try the subcollection path first
+        subRef.get()
+            .addOnSuccessListener { subSnap ->
+                if (subSnap.exists()) {
+                    // verify ownership
+                    val ownerId = subSnap.getString("userId")
+                    if (ownerId != authUid) {
+                        _uiState.update { it.copy(isSavingEdit = false, errorMessage = "You can only edit your own review.") }
+                        return@addOnSuccessListener
+                    }
+                    val updateMap = mapOf(
+                        "reviewText" to newText,
+                        "rating" to newRating,
+                        "editedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                    )
+                    subRef.update(updateMap)
+                        .addOnSuccessListener {
+                            loadReviews(productId)
+                            _uiState.update {
+                                it.copy(
+                                    isSavingEdit = false,
+                                    editingReviewId = null,
+                                    editedText = "",
+                                    editedRating = 0f,
+                                    errorMessage = null
+                                )
+                            }
+                            onSuccess()
+                        }
+                        .addOnFailureListener { e ->
+                            _uiState.update { it.copy(isSavingEdit = false, errorMessage = e.message) }
+                            onError(e)
+                        }
+                } else {
+                    // Fallback to top-level /reviews/{reviewId}
+                    topRef.get()
+                        .addOnSuccessListener { topSnap ->
+                            if (!topSnap.exists()) {
+                                _uiState.update { it.copy(isSavingEdit = false, errorMessage = "Review not found.") }
+                                return@addOnSuccessListener
+                            }
+
+                            val ownerId = topSnap.getString("userId")
+                            if (ownerId != authUid) {
+                                _uiState.update { it.copy(isSavingEdit = false, errorMessage = "You can only edit your own review.") }
+                                return@addOnSuccessListener
+                            }
+
+                            val updateMap = mapOf(
+                                "reviewText" to newText,
+                                "rating" to newRating,
+                                "editedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                            )
+                            topRef.update(updateMap)
+                                .addOnSuccessListener {
+                                    loadReviews(productId)
+                                    _uiState.update {
+                                        it.copy(
+                                            isSavingEdit = false,
+                                            editingReviewId = null,
+                                            editedText = "",
+                                            editedRating = 0f,
+                                            errorMessage = null
+                                        )
+                                    }
+                                    onSuccess()
+                                }
+                                .addOnFailureListener { e ->
+                                    _uiState.update { it.copy(isSavingEdit = false, errorMessage = e.message) }
+                                    onError(e)
+                                }
+                        }
+                        .addOnFailureListener { e ->
+                            _uiState.update { it.copy(isSavingEdit = false, errorMessage = e.message) }
+                            onError(e)
+                        }
+                }
+            }
+            .addOnFailureListener { e ->
+                _uiState.update { it.copy(isSavingEdit = false, errorMessage = e.message) }
+                onError(e)
+            }
     }
 }
