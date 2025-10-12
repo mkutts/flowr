@@ -21,7 +21,7 @@ import com.mdksolutions.flowr.ui.screens.reviews.MyReviewsScreen
 import com.mdksolutions.flowr.ui.screens.profile.PublicProfileScreen
 import com.mdksolutions.flowr.ui.screens.profile.FollowingScreen
 import com.mdksolutions.flowr.ui.screens.profile.BudtenderWorkEditScreen
-
+import com.mdksolutions.flowr.ui.screens.auth.SignUpScreen
 
 @Composable
 fun AppNavGraph(
@@ -35,6 +35,7 @@ fun AppNavGraph(
         ) {
             composable("age_gate") { AgeGateScreen(navController) }
             composable("auth") { AuthScreen(navController) }
+            composable("signup") { SignUpScreen(navController) }
             composable("role_selection") { RoleSelectionScreen(navController) }
 
             // ✅ Scope HomeScreen's ViewModel to this back stack entry

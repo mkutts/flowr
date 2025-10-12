@@ -87,6 +87,12 @@ fun PublicProfileScreen(
                                             text = p.displayName.ifBlank { "Unnamed" },
                                             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold)
                                         )
+                                        // NEW: show @username under the display name
+                                        Spacer(Modifier.height(4.dp))
+                                        Text(
+                                            text = "@" + (p.username.ifBlank { "unknown" }),
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
                                         if (p.role.isNotBlank()) {
                                             Text("Role: ${p.role}", style = MaterialTheme.typography.bodySmall)
                                         }

@@ -21,6 +21,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import coil.compose.rememberAsyncImagePainter
 import com.mdksolutions.flowr.viewmodel.ProfileViewModel
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,6 +33,10 @@ fun ProfileScreen(navController: NavController, viewModel: ProfileViewModel = vi
     ) { uri ->
         if (uri != null) viewModel.uploadProfilePhoto(uri)
     }
+
+    // NEW: snackbar host + scope
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
@@ -51,7 +56,8 @@ fun ProfileScreen(navController: NavController, viewModel: ProfileViewModel = vi
                     }
                 }
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) } // NEW
     ) { padding ->
         when {
             ui.isLoading -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
@@ -69,6 +75,7 @@ fun ProfileScreen(navController: NavController, viewModel: ProfileViewModel = vi
                 } else {
                     ProfileContent(
                         displayName = p.displayName,
+                        username = p.username, // NEW
                         photoUrl = p.photoUrl,
                         role = p.role,
                         reviewCount = ui.reviewCount,
@@ -82,6 +89,12 @@ fun ProfileScreen(navController: NavController, viewModel: ProfileViewModel = vi
                         onOpenFollowing = { navController.navigate("following") },
                         onOpenWork = { navController.navigate("edit_work") }, // NEW
                         onRename = { viewModel.updateDisplayName(it) },
+                        onChangeUsername = { newU ->
+                            viewModel.updateUsername(newU) { success, msg ->
+                                val feedback = msg ?: if (success) "Username updated!" else "Update failed."
+                                scope.launch { snackbarHostState.showSnackbar(feedback) }
+                            }
+                        }, // NEW
                         modifier = Modifier.padding(padding)
                     )
                 }
@@ -93,6 +106,7 @@ fun ProfileScreen(navController: NavController, viewModel: ProfileViewModel = vi
 @Composable
 private fun ProfileContent(
     displayName: String,
+    username: String,                // NEW
     photoUrl: String?,
     role: String,
     reviewCount: Int,
@@ -102,10 +116,15 @@ private fun ProfileContent(
     onOpenFollowing: () -> Unit,
     onOpenWork: () -> Unit, // NEW
     onRename: (String) -> Unit,
+    onChangeUsername: (String) -> Unit, // NEW
     modifier: Modifier = Modifier
 ) {
     var editing by remember { mutableStateOf(false) }
     var nameDraft by remember { mutableStateOf(displayName) }
+
+    // NEW: username edit dialog state
+    var showUsernameDialog by remember { mutableStateOf(false) }
+    var usernameDraft by remember { mutableStateOf(username) }
 
     Column(
         modifier = modifier
@@ -137,6 +156,11 @@ private fun ProfileContent(
                     text = displayName.ifBlank { "Unnamed" },
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold)
                 )
+                // NEW: show @username under the display name
+                Text(
+                    text = "@" + username.ifBlank { "unknown" },
+                    style = MaterialTheme.typography.bodyMedium
+                )
                 if (role.isNotBlank()) {
                     Text(text = "Role: $role", style = MaterialTheme.typography.bodySmall)
                 }
@@ -161,6 +185,7 @@ private fun ProfileContent(
 
         HorizontalDivider()
 
+        // ---- Display name edit block (unchanged) ----
         if (editing) {
             OutlinedTextField(
                 value = nameDraft,
@@ -180,6 +205,65 @@ private fun ProfileContent(
             }
         } else {
             OutlinedButton(onClick = { editing = true }) { Text("Edit Profile") }
+        }
+
+        // ---- NEW: Username section with Change action ----
+        Text("Username", style = MaterialTheme.typography.labelLarge)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                text = "@" + username.ifBlank { "unknown" },
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyLarge
+            )
+            TextButton(onClick = {
+                usernameDraft = username
+                showUsernameDialog = true
+            }) { Text("Change") }
+        }
+
+        // ---- NEW: Change Username dialog ----
+        if (showUsernameDialog) {
+            AlertDialog(
+                onDismissRequest = { showUsernameDialog = false },
+                title = { Text("Change username") },
+                text = {
+                    Column {
+                        OutlinedTextField(
+                            value = usernameDraft,
+                            onValueChange = {
+                                // allow letters, digits, underscore, dot
+                                val filtered = it.filter { ch -> ch.isLetterOrDigit() || ch == '_' || ch == '.' }
+                                usernameDraft = filtered
+                            },
+                            label = { Text("New username") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "3–24 characters; letters, numbers, _ or .; not case-sensitive.",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        val u = usernameDraft.trim()
+                        // quick client-side guardrails
+                        if (u.length < 3 || u.length > 24 || u.startsWith(".") || u.endsWith(".")) {
+                            return@TextButton
+                        }
+                        onChangeUsername(u) // triggers snackbar in parent
+                        showUsernameDialog = false
+                    }) { Text("Save") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showUsernameDialog = false }) { Text("Cancel") }
+                }
+            )
         }
     }
 }

@@ -16,9 +16,11 @@ import com.google.firebase.storage.UploadTask
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import com.google.firebase.firestore.FirebaseFirestoreException
 
 import com.google.firebase.firestore.SetOptions
 import android.util.Log
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 
 data class ProfileUiState(
     val isLoading: Boolean = true,
@@ -52,14 +54,50 @@ class ProfileViewModel : ViewModel() {
                 val docRef = db.collection("users").document(uid)
                 val snap = docRef.get().awaitk()
 
-                val profile = if (snap.exists()) {
-                    snap.toObject(UserProfile::class.java)?.copy(uid = uid)
+                // Helper: look up the claimed username (if any) from /usernames
+                suspend fun fetchClaimedUsername(): Pair<String, String> {
+                    val qs = db.collection("usernames")
+                        .whereEqualTo("uid", uid)
+                        .limit(1)
+                        .get()
+                        .awaitk()
+                    val claim = qs.documents.firstOrNull()
+                    val uname = claim?.getString("username").orEmpty()
+                    val lower = claim?.id.orEmpty() // document id is the lowercase username
+                    return uname to lower
+                }
+
+                val profile: UserProfile = if (snap.exists()) {
+                    // Existing profile
+                    val loaded = snap.toObject(UserProfile::class.java)?.copy(uid = uid)
+                        ?: UserProfile(uid = uid)
+
+                    // Backfill username fields if missing/blank
+                    if (loaded.username.isBlank() || loaded.usernameLower.isBlank()) {
+                        val (uname, lower) = fetchClaimedUsername()
+                        if (uname.isNotBlank()) {
+                            // Merge back so future reads have it populated
+                            docRef.set(
+                                mapOf("username" to uname, "usernameLower" to lower),
+                                SetOptions.merge()
+                            ).awaitk()
+                            loaded.copy(username = uname, usernameLower = lower)
+                        } else {
+                            loaded
+                        }
+                    } else {
+                        loaded
+                    }
                 } else {
+                    // Seed brand-new profile, including claimed username if present
+                    val (uname, lower) = fetchClaimedUsername()
                     val seeded = UserProfile(
                         uid = uid,
                         displayName = user.displayName ?: user.email ?: "",
                         email = user.email ?: "",
-                        photoUrl = user.photoUrl?.toString()
+                        photoUrl = user.photoUrl?.toString(),
+                        username = uname,
+                        usernameLower = lower
                     )
                     docRef.set(seeded).awaitk()
                     seeded
@@ -83,6 +121,7 @@ class ProfileViewModel : ViewModel() {
         }
     }
 
+
     fun updateDisplayName(newName: String) {
         val p = _uiState.value.profile ?: return
         viewModelScope.launch {
@@ -93,6 +132,76 @@ class ProfileViewModel : ViewModel() {
                 _uiState.update { it.copy(profile = it.profile?.copy(displayName = newName)) }
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.message) }
+            }
+        }
+    }
+
+    fun updateUsername(newName: String, onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
+        val uid = auth.currentUser?.uid
+        val current = _uiState.value.profile
+        if (uid == null || current == null) {
+            onResult(false, "Not signed in")
+            return
+        }
+
+        val trimmed = newName.trim()
+        val newLower = trimmed.lowercase()
+
+        // quick client-side guardrails
+        val valid = trimmed.length in 3..24 &&
+                !trimmed.startsWith(".") &&
+                !trimmed.endsWith(".") &&
+                trimmed.all { it.isLetterOrDigit() || it == '_' || it == '.' }
+        if (!valid) {
+            onResult(false, "Invalid username format")
+            return
+        }
+
+        val oldLower = current.usernameLower
+
+        viewModelScope.launch {
+            try {
+                // 1) Atomically claim the new username; rules must have:
+                //    allow create: if !exists(...)
+                //    allow update: if false
+                val claimRef = db.collection("usernames").document(newLower)
+                val claimData = mapOf(
+                    "uid" to uid,
+                    "username" to trimmed,
+                    "createdAt" to System.currentTimeMillis()
+                )
+                // Using set(): if the doc already exists, this is an UPDATE and will be
+                // denied by rules (PERMISSION_DENIED). If it doesn't exist, it's a CREATE and allowed.
+                claimRef.set(claimData).awaitk()
+
+                // 2) Update the user's profile with the new username
+                db.collection("users").document(uid)
+                    .update(mapOf("username" to trimmed, "usernameLower" to newLower))
+                    .awaitk()
+
+                // 3) Best-effort: delete old username claim if it belonged to this user
+                if (oldLower.isNotBlank() && oldLower != newLower) {
+                    val oldRef = db.collection("usernames").document(oldLower)
+                    val snap = oldRef.get().awaitk()
+                    if (snap.exists() && snap.getString("uid") == uid) {
+                        oldRef.delete().awaitk()
+                    }
+                }
+
+                // 4) Update local UI state
+                _uiState.update {
+                    it.copy(profile = it.profile?.copy(username = trimmed, usernameLower = newLower))
+                }
+                onResult(true, null)
+            } catch (e: FirebaseFirestoreException) {
+                val msg =
+                    if (e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED ||
+                        e.code == FirebaseFirestoreException.Code.ALREADY_EXISTS
+                    ) "That username is taken."
+                    else e.localizedMessage ?: "Unknown error"
+                onResult(false, msg)
+            } catch (e: Exception) {
+                onResult(false, e.localizedMessage ?: "Unknown error")
             }
         }
     }
@@ -146,6 +255,7 @@ suspend fun <T> Task<T>.awaitk(): T = suspendCancellableCoroutine { cont ->
 }
 
 // Await for UploadTask (Firebase Storage)
+@OptIn(ExperimentalCoroutinesApi::class)
 suspend fun UploadTask.awaitk(): UploadTask.TaskSnapshot =
     suspendCancellableCoroutine { cont ->
         addOnSuccessListener { snap -> cont.resume(snap) {} }

@@ -161,42 +161,12 @@ fun AuthScreen(navController: NavController) {
                 if (isLoading) {
                     CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                 } else {
+                    // 🔁 CHANGED: Sign Up now navigates to dedicated screen
                     Button(onClick = {
-                        isLoading = true
-                        auth.createUserWithEmailAndPassword(email, password)
-                            .addOnCompleteListener { task ->
-                                if (task.isSuccessful) {
-                                    val user = auth.currentUser
-                                    if (user != null) {
-                                        db.collection("users").document(user.uid).get()
-                                            .addOnSuccessListener { document ->
-                                                isLoading = false
-                                                if (document.exists()) {
-                                                    navController.navigate("home") {
-                                                        popUpTo("auth") { inclusive = true }  // clear login from back stack
-                                                        launchSingleTop = true
-                                                    }
-                                                } else {
-                                                    navController.navigate("role_selection") {
-                                                        popUpTo("auth") { inclusive = true }
-                                                        launchSingleTop = true
-                                                    }
-                                                }
-                                            }
-                                            .addOnFailureListener { e ->
-                                                isLoading = false
-                                                errorMessage = "User check failed: ${e.message}"
-                                            }
-                                    } else {
-                                        isLoading = false
-                                        errorMessage = "No authenticated user found after sign up."
-                                    }
-                                } else {
-                                    errorMessage = "Sign Up Failed: ${task.exception?.message}"
-                                    isLoading = false
-                                }
-                            }
-                    }) { Text("Sign Up") }
+                        navController.navigate("signup")
+                    }) {
+                        Text("Create Account")
+                    }
 
                     Spacer(modifier = Modifier.height(12.dp))
 
