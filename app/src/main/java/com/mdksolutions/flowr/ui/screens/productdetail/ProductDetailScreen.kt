@@ -23,11 +23,14 @@ import com.mdksolutions.flowr.model.Review
 import com.mdksolutions.flowr.viewmodel.ProductDetailViewModel
 import java.util.Locale
 
-// PATCH: imports for editing UI
+// PATCH: imports for editing & deleting UI
 import com.google.firebase.auth.FirebaseAuth
 import androidx.compose.material3.Slider
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.ButtonDefaults
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -36,7 +39,7 @@ fun ProductDetailScreen(navController: NavController, productId: String?) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // PATCH: current user id for author checks
+    // current user id for author checks
     val currentUserId = FirebaseAuth.getInstance().currentUser?.uid
 
     // Load product and reviews on first composition
@@ -47,7 +50,7 @@ fun ProductDetailScreen(navController: NavController, productId: String?) {
         }
     }
 
-    // Snackbar for errors
+    // Snackbar for errors + status messages
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let {
             snackbarHostState.showSnackbar(it)
@@ -181,17 +184,55 @@ fun ProductDetailScreen(navController: NavController, productId: String?) {
                                             }
                                         )
 
-                                        // Only show Edit for the author
+                                        // Author actions: Edit + Delete
                                         if (review.userId == currentUserId) {
-                                            TextButton(
-                                                onClick = {
-                                                    viewModel.startEditingReview(
-                                                        reviewId = review.id,
-                                                        currentText = review.reviewText ?: "",
-                                                        currentRating = review.rating
-                                                    )
+                                            var confirmDelete by remember(review.id) { mutableStateOf(false) }
+
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                TextButton(
+                                                    onClick = {
+                                                        viewModel.startEditingReview(
+                                                            reviewId = review.id,
+                                                            currentText = review.reviewText ?: "",
+                                                            currentRating = review.rating
+                                                        )
+                                                    }
+                                                ) { Text("Edit") }
+
+                                                Spacer(Modifier.width(8.dp))
+
+                                                TextButton(
+                                                    enabled = !uiState.isDeletingReview,
+                                                    colors = ButtonDefaults.textButtonColors(
+                                                        contentColor = MaterialTheme.colorScheme.error
+                                                    ),
+                                                    onClick = { confirmDelete = true }
+                                                ) {
+                                                    Text(if (uiState.isDeletingReview) "Deleting…" else "Delete")
                                                 }
-                                            ) { Text("Edit") }
+                                            }
+
+                                            if (confirmDelete) {
+                                                AlertDialog(
+                                                    onDismissRequest = { confirmDelete = false },
+                                                    title = { Text("Delete review?") },
+                                                    text = { Text("This action cannot be undone.") },
+                                                    confirmButton = {
+                                                        TextButton(
+                                                            enabled = !uiState.isDeletingReview,
+                                                            onClick = {
+                                                                viewModel.deleteReview(review.id)
+                                                                confirmDelete = false
+                                                            }
+                                                        ) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                                                    },
+                                                    dismissButton = {
+                                                        TextButton(onClick = { confirmDelete = false }) {
+                                                            Text("Cancel")
+                                                        }
+                                                    }
+                                                )
+                                            }
                                         }
                                     }
 
@@ -235,15 +276,15 @@ fun ReviewItem(
                 Text(text = "Reported THC: $it%")
             }
 
-            // ✅ Free-text body with Read more / Read less + clickable @mentions
+            // Free-text body with Read more / Read less + clickable @mentions
             if (!review.reviewText.isNullOrBlank()) {
                 Spacer(Modifier.height(8.dp))
 
                 var expanded by remember(review.id) { mutableStateOf(false) }
                 val previewMaxLines = 3
-                val body = review.reviewText
+                val body = review.reviewText   // <-- make non-null inside this block
 
-                // Use the same heuristic for whether to show the "Read more" affordance
+                // Heuristic whether to show "Read more"
                 val showToggle = body.lineCountWouldExceed(previewMaxLines)
 
                 // Approximate a preview by characters; if not expanded, show truncated text with ellipsis
@@ -284,10 +325,7 @@ private fun MentionText(
     onMentionClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // ✅ read composable state (colors) outside remember
     val linkColor = MaterialTheme.colorScheme.primary
-
-    // Token format: @[Display Name](uid) — no redundant escape for ']'
     val mentionRegex = remember { Regex("@\\[(.+?)]\\((.+?)\\)") }
 
     val annotated: AnnotatedString = remember(text, linkColor) {
@@ -295,7 +333,6 @@ private fun MentionText(
             var idx = 0
             for (m in mentionRegex.findAll(text)) {
                 val range = m.range
-                // append plain text before the mention
                 if (range.first > idx) append(text.substring(idx, range.first))
 
                 val display = m.groupValues[1]
@@ -324,7 +361,7 @@ private fun MentionText(
         }
     }
 
-    @Suppress("DEPRECATION") // ClickableText is deprecated; can migrate to LinkAnnotation if you prefer
+    @Suppress("DEPRECATION")
     ClickableText(
         text = annotated,
         style = MaterialTheme.typography.bodyMedium,
@@ -338,11 +375,8 @@ private fun MentionText(
 
 /**
  * Lightweight heuristic to decide whether we should show a “Read more” link.
- * We can’t measure layout here, so we approximate:
- * - If the text length is large enough, assume it will exceed N lines in most devices.
- * - Tuned so typical ~70–90 chars/line at body text will need ~3 lines past ~300 chars.
  */
 private fun String.lineCountWouldExceed(maxPreviewLines: Int): Boolean {
-    val approxCharsPerLine = 90 // conservative for body text on phones
+    val approxCharsPerLine = 90
     return length > maxPreviewLines * approxCharsPerLine
 }
