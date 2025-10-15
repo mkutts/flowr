@@ -30,6 +30,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import androidx.core.content.edit
+import java.util.Locale // ✅ for category check
 
 // ==== Storage for custom words (can't write to assets at runtime) ====
 private const val PREFS_NAME = "custom_words_prefs"
@@ -72,11 +73,18 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
     val snackbarHostState = remember { SnackbarHostState() }
     var validationMessage by remember { mutableStateOf<String?>(null) }
 
+    // ✅ Load product so we can detect category (mg vs %)
+    LaunchedEffect(productId) {
+        if (productId != null) viewModel.loadProduct(productId)
+    }
+
     // ✅ Form state (survives config changes)
     var rating by rememberSaveable { mutableStateOf("") }
     var feels by rememberSaveable { mutableStateOf("") }
     var activity by rememberSaveable { mutableStateOf("") }
-    var thc by rememberSaveable { mutableStateOf("") }
+
+    // 🔁 Replaces old "thc" field with adaptive potency text
+    var potencyText by rememberSaveable { mutableStateOf("") }
 
     // ✅ NEW: free-text review state
     var reviewText by rememberSaveable { mutableStateOf("") }
@@ -127,6 +135,15 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
             // If you don't have activities.json yet, keep the list empty and still work.
             activities = customActivities.distinct().sorted()
         }
+    }
+
+    // Decide potency unit based on category
+    val usesMg by remember(uiState.product?.category) {
+        mutableStateOf(
+            (uiState.product?.category?.lowercase(Locale.US) ?: "").let { cat ->
+                cat.contains("edible") || cat.contains("drink")
+            }
+        )
     }
 
     // ===== Feels autocomplete (comma-separated tokens)
@@ -290,10 +307,15 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
 
             Spacer(modifier = Modifier.height(8.dp))
 
+            // ✅ Adaptive potency input: mg for edibles/drinks, % for others
             OutlinedTextField(
-                value = thc,
-                onValueChange = { thc = it },
-                label = { Text("Reported THC (%) - Optional") },
+                value = potencyText,
+                onValueChange = { input ->
+                    val cleaned = input.replace("[^0-9.]".toRegex(), "")
+                    potencyText = cleaned
+                },
+                label = { Text(if (usesMg) "Dosage (mg per serving) - Optional" else "Reported THC (%) - Optional") },
+                placeholder = { Text(if (usesMg) "e.g. 10" else "e.g. 18.5") },
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Number,
                     imeAction = ImeAction.Next
@@ -442,14 +464,24 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
                                 activities = (activities + actVal).distinct().sorted()
                             }
 
+                            // ✅ Parse potency based on category
+                            val parsed = potencyText.toDoubleOrNull()
+                            val safePotency = when {
+                                parsed == null -> null
+                                usesMg -> parsed.coerceIn(0.0, 1000.0)   // mg sane cap
+                                else   -> parsed.coerceIn(0.0, 100.0)    // % cap
+                            }
+
                             val review = Review(
                                 productId = productId,
                                 userId = user.uid,
                                 userName = user.email ?: "Anonymous",
                                 rating = ratingVal,
                                 feels = feelsList,
-                                activity = activity,
-                                reportedTHC = thc.toDoubleOrNull(),
+                                activity = actVal,
+                                // ✅ write only one of these:
+                                reportedTHC = if (!usesMg) safePotency else null,
+                                dosageMg = if (usesMg) safePotency else null,
                                 reviewText = cleanedReviewText.ifEmpty { null }
                             )
 

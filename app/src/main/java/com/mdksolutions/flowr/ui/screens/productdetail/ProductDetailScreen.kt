@@ -97,11 +97,23 @@ fun ProductDetailScreen(navController: NavController, productId: String?) {
                     // --- compute averages from the reviews currently loaded ---
                     val reviews = uiState.reviews
 
-                    val avgThcFromReviews by remember(reviews) {
+                    // ✅ Decide potency unit based on category (edible/drink → mg; else → %)
+                    val usesMg = remember(uiState.product?.category) {
+                        val cat = uiState.product?.category?.lowercase(Locale.US) ?: ""
+                        cat.contains("edible") || cat.contains("drink")
+                    }
+
+                    val avgPotency by remember(reviews, usesMg) {
                         mutableStateOf(
-                            reviews.mapNotNull { it.reportedTHC }
-                                .takeIf { it.isNotEmpty() }
-                                ?.average()
+                            if (usesMg) {
+                                reviews.mapNotNull { it.dosageMg }
+                                    .takeIf { it.isNotEmpty() }
+                                    ?.average()
+                            } else {
+                                reviews.mapNotNull { it.reportedTHC }
+                                    .takeIf { it.isNotEmpty() }
+                                    ?.average()
+                            }
                         )
                     }
                     val avgRatingFromReviews by remember(reviews) {
@@ -113,15 +125,20 @@ fun ProductDetailScreen(navController: NavController, productId: String?) {
                     }
 
                     // Format helpers with explicit Locale
-                    val avgThcText = avgThcFromReviews?.let { String.format(Locale.US, "%.1f%%", it) } ?: "0.0%"
+                    val avgPotencyText = when {
+                        avgPotency == null && usesMg -> "0 mg"
+                        avgPotency == null && !usesMg -> "0.0%"
+                        usesMg -> String.format(Locale.US, "%.0f mg", avgPotency)
+                        else -> String.format(Locale.US, "%.1f%%", avgPotency)
+                    }
                     val avgRatingText = avgRatingFromReviews?.let { String.format(Locale.US, "%.1f", it) } ?: "0.0"
 
                     Text(text = product.name, style = MaterialTheme.typography.titleLarge)
                     Text(text = "Brand: ${product.brand}")
                     Text(text = "Category: ${product.category}")
 
-                    // Use computed averages rather than the (possibly stale) product fields
-                    Text(text = "Avg THC: $avgThcText")
+                    // ✅ Use mg vs % depending on product category
+                    Text(text = if (usesMg) "Avg Dosage: $avgPotencyText" else "Avg THC: $avgPotencyText")
                     Text(text = "Avg Rating: $avgRatingText")
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -272,8 +289,11 @@ fun ReviewItem(
             Text(text = "Rating: ${review.rating} ⭐")
             Text(text = "Feels: ${review.feels.joinToString(", ")}")
             Text(text = "Activity: ${review.activity}")
-            review.reportedTHC?.let {
-                Text(text = "Reported THC: $it%")
+
+            // ✅ Show mg for edibles/drinks, else %
+            when {
+                review.dosageMg != null -> Text(text = "Dosage: ${review.dosageMg.toInt()} mg")
+                review.reportedTHC != null -> Text(text = "Reported THC: ${review.reportedTHC}%")
             }
 
             // Free-text body with Read more / Read less + clickable @mentions
@@ -282,7 +302,7 @@ fun ReviewItem(
 
                 var expanded by remember(review.id) { mutableStateOf(false) }
                 val previewMaxLines = 3
-                val body = review.reviewText   // <-- make non-null inside this block
+                val body = review.reviewText   // safe due to isNullOrBlank() guard
 
                 // Heuristic whether to show "Read more"
                 val showToggle = body.lineCountWouldExceed(previewMaxLines)
