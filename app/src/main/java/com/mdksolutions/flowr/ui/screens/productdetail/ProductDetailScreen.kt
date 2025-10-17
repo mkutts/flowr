@@ -97,10 +97,13 @@ fun ProductDetailScreen(navController: NavController, productId: String?) {
                     // --- compute averages from the reviews currently loaded ---
                     val reviews = uiState.reviews
 
-                    // ✅ Decide potency unit based on category (edible/drink → mg; else → %)
-                    val usesMg = remember(uiState.product?.category) {
-                        val cat = uiState.product?.category?.lowercase(Locale.US) ?: ""
-                        cat.contains("edible") || cat.contains("drink")
+                    // AFTER: prefer product flag; fall back to category
+                    val usesMg = remember(uiState.product) {
+                        val p = uiState.product
+                        p?.potencyUsesMg ?: run {
+                            val cat = p?.category?.lowercase(Locale.US) ?: ""
+                            cat.contains("edible") || cat.contains("drink")
+                        }
                     }
 
                     val avgPotency by remember(reviews, usesMg) {
