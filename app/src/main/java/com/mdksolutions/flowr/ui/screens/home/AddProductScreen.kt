@@ -10,6 +10,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.mdksolutions.flowr.model.Product
 import com.mdksolutions.flowr.viewmodel.HomeViewModel
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import java.util.Locale
+import androidx.compose.material3.MenuAnchorType
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,6 +47,18 @@ fun AddProductScreen(navController: NavController, viewModel: HomeViewModel = vi
     val strainOptions = listOf("Indica", "Sativa", "Hybrid", "Sativa-hybrid", "Indica-Hybrid")
     var strainType by remember { mutableStateOf("") }
     var strainMenuExpanded by remember { mutableStateOf(false) }
+
+    // ─────────────────────────────────────────────────────────────
+    // PATCH: Potency toggle + adaptive input
+    // ─────────────────────────────────────────────────────────────
+    var potencyUsesMg by remember { mutableStateOf(false) } // false = %, true = mg
+    var potencyText by remember { mutableStateOf("") }
+
+    // Infer default potency mode from category as the user picks
+    LaunchedEffect(category) {
+        val cat = (if (category == "Other") otherCategory else category).lowercase(Locale.US)
+        potencyUsesMg = cat.contains("edible") || cat.contains("drink")
+    }
 
     var validationMessage by remember { mutableStateOf<String?>(null) }
 
@@ -107,13 +123,13 @@ fun AddProductScreen(navController: NavController, viewModel: HomeViewModel = vi
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     OutlinedTextField(
-                        value = if (category.isEmpty()) "" else category,
+                        value = category.ifEmpty { "" },
                         onValueChange = {},
                         readOnly = true,
                         label = { Text("Category") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = categoryMenuExpanded) },
                         modifier = Modifier
-                            .menuAnchor()
+                            .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
                             .fillMaxWidth()
                     )
                     ExposedDropdownMenu(
@@ -161,7 +177,7 @@ fun AddProductScreen(navController: NavController, viewModel: HomeViewModel = vi
                         label = { Text("State") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = stateMenuExpanded) },
                         modifier = Modifier
-                            .menuAnchor()
+                            .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
                             .fillMaxWidth()
                     )
                     ExposedDropdownMenu(
@@ -195,7 +211,7 @@ fun AddProductScreen(navController: NavController, viewModel: HomeViewModel = vi
                         label = { Text("Strain Type") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = strainMenuExpanded) },
                         modifier = Modifier
-                            .menuAnchor()
+                            .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
                             .fillMaxWidth()
                     )
                     ExposedDropdownMenu(
@@ -214,6 +230,41 @@ fun AddProductScreen(navController: NavController, viewModel: HomeViewModel = vi
                     }
                 }
 
+                // ─────────────────────────────────────────────────────────────
+                // PATCH: Potency mode toggle + adaptive input
+                // ─────────────────────────────────────────────────────────────
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("Potency mode", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(8.dp))
+                SingleChoiceSegmentedButtonRow {
+                    SegmentedButton(
+                        selected = !potencyUsesMg,
+                        onClick = { potencyUsesMg = false },
+                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                    ) { Text("Percentage (%)") }
+
+                    SegmentedButton(
+                        selected = potencyUsesMg,
+                        onClick = { potencyUsesMg = true },
+                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                    ) { Text("Dosage (mg)") }
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                OutlinedTextField(
+                    value = potencyText,
+                    onValueChange = { input ->
+                        potencyText = input.replace("[^0-9.]".toRegex(), "")
+                    },
+                    label = {
+                        Text(if (potencyUsesMg) "Dosage (mg) – Optional" else "THC % – Optional")
+                    },
+                    placeholder = { Text(if (potencyUsesMg) "e.g. 10" else "e.g. 18.5") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
                 Spacer(modifier = Modifier.height(16.dp))
 
                 if (uiState.isLoading) {
@@ -230,12 +281,24 @@ fun AddProductScreen(navController: NavController, viewModel: HomeViewModel = vi
                                 selectedState.isNotEmpty() &&
                                 strainType.isNotEmpty()
                             ) {
+                                // Parse and clamp potency based on mode
+                                val parsed = potencyText.toDoubleOrNull()
+                                val safePotency = when {
+                                    parsed == null -> null
+                                    potencyUsesMg -> parsed.coerceIn(0.0, 10000.0) // generous cap (mg)
+                                    else -> parsed.coerceIn(0.0, 100.0)           // 0–100 %
+                                }
+
                                 val product = Product(
                                     name = name,
                                     brand = brand,
-                                    category = finalCategory,   // 👈 saves custom value when "Other"
+                                    category = finalCategory,   // saves custom value when "Other"
                                     state = selectedState,
-                                    strainType = strainType
+                                    strainType = strainType,
+                                    // NEW potency fields (optional)
+                                    potencyUsesMg = potencyUsesMg,
+                                    thcPercent = if (!potencyUsesMg) safePotency else null,
+                                    dosageMg = if (potencyUsesMg) safePotency else null
                                 )
                                 viewModel.addProduct(product)
                             } else {

@@ -30,6 +30,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import androidx.core.content.edit
+import java.util.Locale // ✅ for category check
 
 // ==== Storage for custom words (can't write to assets at runtime) ====
 private const val PREFS_NAME = "custom_words_prefs"
@@ -72,11 +73,18 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
     val snackbarHostState = remember { SnackbarHostState() }
     var validationMessage by remember { mutableStateOf<String?>(null) }
 
+    // ✅ Load product so we can detect category (mg vs %)
+    LaunchedEffect(productId) {
+        if (productId != null) viewModel.loadProduct(productId)
+    }
+
     // ✅ Form state (survives config changes)
     var rating by rememberSaveable { mutableStateOf("") }
     var feels by rememberSaveable { mutableStateOf("") }
     var activity by rememberSaveable { mutableStateOf("") }
-    var thc by rememberSaveable { mutableStateOf("") }
+
+    // 🔁 Replaces old "thc" field with adaptive potency text
+    var potencyText by rememberSaveable { mutableStateOf("") }
 
     // ✅ NEW: free-text review state
     var reviewText by rememberSaveable { mutableStateOf("") }
@@ -84,15 +92,50 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
     val minCharsToSubmit = 12
     val remainingChars = reviewCharLimit - reviewText.length
 
-    // ✅ NEW: tagging state
+    // ✅ NEW: tagging state (button dialog remains)
     var showTagDialog by rememberSaveable { mutableStateOf(false) }
     var tagSearch by rememberSaveable { mutableStateOf("") }
+
+    // ✅ NEW: inline @mentions state
+    var mentionExpanded by remember { mutableStateOf(false) }
+    var mentionQuery by remember { mutableStateOf("") }
+    val mentionRegex = remember { Regex("(?:^|\\s)@(\\S*)$") }
+
+    // We’ll reuse this VM for both inline suggestions and the dialog
+    val followingVm: FollowingViewModel = viewModel()
+    val followingState by followingVm.uiState.collectAsState()
+
+    // Build filtered suggestions from following users (up to 8)
+    val mentionSuggestions by remember(mentionQuery, followingState.users) {
+        mutableStateOf(
+            if (mentionQuery.isBlank()) emptyList()
+            else followingState.users
+                .filter { u ->
+                    u.displayName.contains(mentionQuery, ignoreCase = true) ||
+                            u.email.contains(mentionQuery, ignoreCase = true)
+                }
+                .take(8)
+        )
+    }
+
+    // Helper to replace trailing @query with @[Display Name](uid)
+    fun insertMentionToken(current: String, display: String, uid: String): String {
+        val match = mentionRegex.find(current)
+        return if (match != null) {
+            val range = match.range
+            val prefix = current.substring(0, range.first)
+            val sep = if (prefix.endsWith(" ")) "" else " "
+            val token = "@[$display]($uid) "
+            (prefix + sep + token)
+        } else {
+            (current + " @[$display]($uid) ").trimStart()
+        }
+    }
 
     val context = LocalContext.current
 
     // ===== Feels dict: base (assets) + custom (prefs)
     var adjectives by remember { mutableStateOf<List<String>>(emptyList()) }
-    // use SnapshotStateList to avoid "mutable collection" warning
     val customFeels: SnapshotStateList<String> = remember {
         mutableStateListOf<String>().apply { addAll(getCustomFeels(context)) }
     }
@@ -118,15 +161,23 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
 
         try {
             val baseActivities = withContext(Dispatchers.IO) {
-                val json = loadJsonFromAssets(context, "activities.json") // <-- assets/activities.json
+                val json = loadJsonFromAssets(context, "activities.json")
                 val arr = JSONArray(json)
                 List(arr.length()) { i -> arr.getString(i) }
             }
             activities = (baseActivities + customActivities).distinct().sorted()
         } catch (_: Exception) {
-            // If you don't have activities.json yet, keep the list empty and still work.
             activities = customActivities.distinct().sorted()
         }
+    }
+
+    // Decide potency unit based on category
+    val usesMg by remember(uiState.product?.category) {
+        mutableStateOf(
+            (uiState.product?.category?.lowercase(Locale.US) ?: "").let { cat ->
+                cat.contains("edible") || cat.contains("drink")
+            }
+        )
     }
 
     // ===== Feels autocomplete (comma-separated tokens)
@@ -290,10 +341,15 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
 
             Spacer(modifier = Modifier.height(8.dp))
 
+            // ✅ Adaptive potency input: mg for edibles/drinks, % for others
             OutlinedTextField(
-                value = thc,
-                onValueChange = { thc = it },
-                label = { Text("Reported THC (%) - Optional") },
+                value = potencyText,
+                onValueChange = { input ->
+                    val cleaned = input.replace("[^0-9.]".toRegex(), "")
+                    potencyText = cleaned
+                },
+                label = { Text(if (usesMg) "Dosage (mg per serving) - Optional" else "Reported THC (%) - Optional") },
+                placeholder = { Text(if (usesMg) "e.g. 10" else "e.g. 18.5") },
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Number,
                     imeAction = ImeAction.Next
@@ -303,40 +359,73 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // ✅ Free-text review box
-            OutlinedTextField(
-                value = reviewText,
-                onValueChange = { new ->
-                    reviewText = if (new.length <= reviewCharLimit) new else new.take(reviewCharLimit)
+            // ✅ Free-text review box WITH inline @mentions
+            ExposedDropdownMenuBox(
+                expanded = mentionExpanded && mentionSuggestions.isNotEmpty(),
+                onExpandedChange = { wantOpen ->
+                    // only expand when there is an active @query
+                    mentionExpanded = wantOpen && mentionSuggestions.isNotEmpty()
                 },
-                label = { Text("Your words") },
-                placeholder = { Text("Tell others what you liked, effects, taste, and any caveats…") },
-                supportingText = {
-                    val tooShort = reviewText.trim().length in 1 until minCharsToSubmit
-                    val msg = when {
-                        reviewText.isBlank() -> "Optional, but helpful."
-                        tooShort -> "A few more words makes this useful (min $minCharsToSubmit chars)."
-                        else -> "$remainingChars characters left"
-                    }
-                    Text(msg)
-                },
-                modifier = Modifier.fillMaxWidth(),
-                minLines = 5,
-                maxLines = 12
-            )
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                OutlinedTextField(
+                    value = reviewText,
+                    onValueChange = { new ->
+                        val clipped = if (new.length <= reviewCharLimit) new else new.take(reviewCharLimit)
+                        reviewText = clipped
 
-            // ✅ NEW: Tag someone button + dialog
+                        // Detect an @query at the end of the text
+                        val m = mentionRegex.find(clipped)
+                        val q = m?.groupValues?.getOrNull(1) ?: ""
+                        mentionQuery = q
+                        mentionExpanded = q.isNotBlank() && mentionSuggestions.isNotEmpty()
+                    },
+                    label = { Text("Your words") },
+                    placeholder = { Text("Type @ to tag someone (e.g., @alex)…") },
+                    supportingText = {
+                        val tooShort = reviewText.trim().length in 1 until minCharsToSubmit
+                        val msg = when {
+                            reviewText.isBlank() -> "Optional, but helpful."
+                            tooShort -> "A few more words makes this useful (min $minCharsToSubmit chars)."
+                            else -> "$remainingChars characters left"
+                        }
+                        Text(msg)
+                    },
+                    modifier = Modifier
+                        .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
+                        .fillMaxWidth(),
+                    minLines = 5,
+                    maxLines = 12
+                )
+
+                ExposedDropdownMenu(
+                    expanded = mentionExpanded && mentionSuggestions.isNotEmpty(),
+                    onDismissRequest = { mentionExpanded = false }
+                ) {
+                    mentionSuggestions.forEach { u: UserProfile ->
+                        DropdownMenuItem(
+                            text = { Text(u.displayName) },
+                            onClick = {
+                                reviewText = insertMentionToken(reviewText, u.displayName, u.uid)
+                                mentionQuery = ""
+                                mentionExpanded = false
+                            },
+                            trailingIcon = {
+                                Text(u.email, style = MaterialTheme.typography.labelSmall)
+                            }
+                        )
+                    }
+                }
+            }
+
+            // ✅ Tag someone (dialog) — optional, kept for now
             Spacer(Modifier.height(8.dp))
             TextButton(onClick = { showTagDialog = true }) {
                 Text("Tag someone")
             }
 
             if (showTagDialog) {
-                val followingVm: FollowingViewModel = viewModel()
-                val followingState by followingVm.uiState.collectAsState()
-                // NOTE: removed followingVm.loadFollowing() to avoid unresolved reference error.
-                // If your VM doesn't auto-load, add the fetch in its init{}.
-
+                // Reuse followingState from above
                 AlertDialog(
                     onDismissRequest = { showTagDialog = false },
                     title = { Text("Tag someone") },
@@ -364,7 +453,6 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .clickable {
-                                                    // Insert token: @[Display Name](uid)
                                                     val token = " @[${u.displayName}](${u.uid}) "
                                                     reviewText = (reviewText + token).trim()
                                                     showTagDialog = false
@@ -393,6 +481,7 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
                         // Close menus so the click isn't eaten
                         feelsExpanded = false
                         activityExpanded = false
+                        mentionExpanded = false
 
                         val user = auth.currentUser
                         if (productId == null) {
@@ -412,7 +501,6 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
                             validationMessage = "Please fill in the activity"
                             return@Button
                         }
-                        // Soft-require meaningful text if they started typing
                         val cleanedReviewText = reviewText.trim()
                         if (cleanedReviewText.isNotEmpty() && cleanedReviewText.length < minCharsToSubmit) {
                             validationMessage = "Please add a bit more detail to your review"
@@ -424,7 +512,7 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
                             .filter { it.isNotEmpty() }
 
                         try {
-                            // Persist any new FEELS
+                            // Persist FEELS
                             val feelsLower = adjectives.map { it.lowercase() }.toSet()
                             val missingFeels = feelsList.filter { it.lowercase() !in feelsLower }
                             if (missingFeels.isNotEmpty()) {
@@ -433,7 +521,7 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
                                 adjectives = (adjectives + missingFeels).distinct().sorted()
                             }
 
-                            // Persist any new ACTIVITY (whole phrase)
+                            // Persist ACTIVITY
                             val actLower = activities.map { it.lowercase() }.toSet()
                             val actVal = activity.trim()
                             if (actVal.isNotEmpty() && actVal.lowercase() !in actLower) {
@@ -442,14 +530,23 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
                                 activities = (activities + actVal).distinct().sorted()
                             }
 
+                            // ✅ Parse potency based on category
+                            val parsed = potencyText.toDoubleOrNull()
+                            val safePotency = when {
+                                parsed == null -> null
+                                usesMg -> parsed.coerceIn(0.0, 1000.0)   // mg sane cap
+                                else   -> parsed.coerceIn(0.0, 100.0)    // % cap
+                            }
+
                             val review = Review(
                                 productId = productId,
                                 userId = user.uid,
                                 userName = user.email ?: "Anonymous",
                                 rating = ratingVal,
                                 feels = feelsList,
-                                activity = activity,
-                                reportedTHC = thc.toDoubleOrNull(),
+                                activity = actVal,
+                                reportedTHC = if (!usesMg) safePotency else null,
+                                dosageMg = if (usesMg) safePotency else null,
                                 reviewText = cleanedReviewText.ifEmpty { null }
                             )
 

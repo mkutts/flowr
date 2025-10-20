@@ -26,7 +26,8 @@ data class ProductDetailUiState(
     val editingReviewId: String? = null,
     val editedText: String = "",
     val editedRating: Float = 0f,
-    val isSavingEdit: Boolean = false
+    val isSavingEdit: Boolean = false,
+    val isDeletingReview: Boolean = false
 )
 
 class ProductDetailViewModel : ViewModel() {
@@ -303,4 +304,90 @@ class ProductDetailViewModel : ViewModel() {
                 onError(e)
             }
     }
+
+    fun deleteReview(
+        reviewId: String,
+        onSuccess: () -> Unit = {},
+        onError: (Throwable) -> Unit = {}
+    ) {
+        val state = _uiState.value
+        val productId = state.product?.id
+        val authUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+
+        if (reviewId.isBlank()) {
+            _uiState.update { it.copy(errorMessage = "Invalid review to delete.") }
+            return
+        }
+        if (authUid == null) {
+            _uiState.update { it.copy(errorMessage = "Not signed in.") }
+            return
+        }
+
+        val subRef = if (!productId.isNullOrBlank()) {
+            db.collection("products").document(productId)
+                .collection("reviews").document(reviewId)
+        } else null
+        val topRef = db.collection("reviews").document(reviewId)
+
+        _uiState.update { it.copy(isDeletingReview = true, errorMessage = null) }
+
+        // helper to perform delete on a found/owned doc
+        fun deleteOwned(ref: com.google.firebase.firestore.DocumentReference) {
+            ref.delete()
+                .addOnSuccessListener {
+                    // Refresh list if we're on product detail
+                    productId?.let { loadReviews(it) }
+                    _uiState.update { it.copy(isDeletingReview = false, errorMessage = "Review deleted") }
+                    onSuccess()
+                }
+                .addOnFailureListener { e ->
+                    _uiState.update { it.copy(isDeletingReview = false, errorMessage = e.message) }
+                    onError(e)
+                }
+        }
+
+        // Try subcollection first (if we have a productId), then top-level
+        val tryTop: () -> Unit = {
+            topRef.get()
+                .addOnSuccessListener { snap ->
+                    if (!snap.exists()) {
+                        _uiState.update { it.copy(isDeletingReview = false, errorMessage = "Review not found.") }
+                        return@addOnSuccessListener
+                    }
+                    val ownerId = snap.getString("userId")
+                    if (ownerId != authUid) {
+                        _uiState.update { it.copy(isDeletingReview = false, errorMessage = "You can only delete your own review.") }
+                        return@addOnSuccessListener
+                    }
+                    deleteOwned(topRef)
+                }
+                .addOnFailureListener { e ->
+                    _uiState.update { it.copy(isDeletingReview = false, errorMessage = e.message) }
+                    onError(e)
+                }
+        }
+
+        if (subRef == null) {
+            tryTop()
+        } else {
+            subRef.get()
+                .addOnSuccessListener { subSnap ->
+                    if (subSnap.exists()) {
+                        val ownerId = subSnap.getString("userId")
+                        if (ownerId != authUid) {
+                            _uiState.update { it.copy(isDeletingReview = false, errorMessage = "You can only delete your own review.") }
+                            return@addOnSuccessListener
+                        }
+                        deleteOwned(subRef)
+                    } else {
+                        tryTop()
+                    }
+                }
+                .addOnFailureListener { e ->
+                    _uiState.update { it.copy(isDeletingReview = false, errorMessage = e.message) }
+                    onError(e)
+                }
+        }
+    }
+
 }
