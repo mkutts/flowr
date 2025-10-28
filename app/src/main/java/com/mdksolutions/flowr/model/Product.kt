@@ -16,6 +16,7 @@ data class Product(
     val topFeels: List<String> = emptyList(),
     val topActivities: List<String> = emptyList(),
     val strainType: String = "",   // ✅ default fixes missing-field crashes
+    val states: List<String>? = null,
 
     // ✅ NEW potency fields (all optional for backward compatibility)
     val potencyUsesMg: Boolean? = null,   // true => show dosage (mg); false => show %; null => fallback to category heuristic
