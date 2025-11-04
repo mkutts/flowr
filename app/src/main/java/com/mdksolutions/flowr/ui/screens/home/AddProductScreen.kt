@@ -18,14 +18,30 @@ import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 
+// ⬇️ NEW: imports for lookup VM + autocomplete
+import com.mdksolutions.flowr.viewmodel.LookupViewModel
+import com.mdksolutions.flowr.ui.components.AutoCompleteTextField
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddProductScreen(navController: NavController, viewModel: HomeViewModel = viewModel()) {
+fun AddProductScreen(
+    navController: NavController,
+    viewModel: HomeViewModel = viewModel(),
+    // ⬇️ NEW: second VM for lookups (Firestore-backed)
+    lookupViewModel: LookupViewModel = viewModel()
+) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
+    // ---- Local screen state ----
+    // We’ll treat "name" as the actual Product Name stored to Firestore,
+    // but it’s now driven by the Strain autocomplete below.
     var name by remember { mutableStateOf("") }
+
+    // Brand/Strain/Other are user inputs that drive autocomplete & saving.
     var brand by remember { mutableStateOf("") }
+    var strain by remember { mutableStateOf("") } // mirrors `name`
+    var other by remember { mutableStateOf("") }  // optional; not yet saved to Product model
 
     // --- Category dropdown ---
     val categoryOptions = listOf("Flower", "Edible", "Vape", "Concentrate", "Pre-Roll", "Other")
@@ -84,6 +100,23 @@ fun AddProductScreen(navController: NavController, viewModel: HomeViewModel = vi
     // ----- SCROLL + INSETS FIX -----
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
+    // ⬇️ NEW: collect lookup UI state
+    val lookupUi = lookupViewModel.ui.collectAsState().value
+
+    // ⬇️ NEW: keep local fields synced with VM query (so dropdowns reflect typing + selections)
+    LaunchedEffect(lookupUi.brandQuery) {
+        if (lookupUi.brandQuery != brand) brand = lookupUi.brandQuery
+    }
+    LaunchedEffect(lookupUi.strainQuery) {
+        if (lookupUi.strainQuery != strain) {
+            strain = lookupUi.strainQuery
+            name = lookupUi.strainQuery // mirror into Product name
+        }
+    }
+    LaunchedEffect(lookupUi.otherQuery) {
+        if (lookupUi.otherQuery != other) other = lookupUi.otherQuery
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -113,21 +146,60 @@ fun AddProductScreen(navController: NavController, viewModel: HomeViewModel = vi
                     Spacer(modifier = Modifier.height(16.dp))
                 }
 
+                // ⬇️ REPLACED: Product Name -> Strain autocomplete (mirrors to name)
                 item {
-                    OutlinedTextField(
-                        value = name,
-                        onValueChange = { name = it },
-                        label = { Text("Product Name") },
+                    AutoCompleteTextField(
+                        label = "Product / Strain",
+                        value = strain,
+                        suggestions = lookupUi.strainSuggestions,
+                        onValueChange = {
+                            strain = it
+                            name = it // keep Product name in sync
+                            lookupViewModel.onStrainQueryChange(it)
+                        },
+                        onItemSelected = { selected ->
+                            strain = selected
+                            name = selected // keep Product name in sync
+                            lookupViewModel.onStrainQueryChange(selected)
+                        },
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                 }
 
+                // ⬇️ REPLACED: Brand text field -> Brand autocomplete
                 item {
-                    OutlinedTextField(
+                    AutoCompleteTextField(
+                        label = "Brand",
                         value = brand,
-                        onValueChange = { brand = it },
-                        label = { Text("Brand") },
+                        suggestions = lookupUi.brandSuggestions,
+                        onValueChange = {
+                            brand = it
+                            lookupViewModel.onBrandQueryChange(it)
+                        },
+                        onItemSelected = { selected ->
+                            brand = selected
+                            lookupViewModel.onBrandQueryChange(selected)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                // ⬇️ NEW: Optional "Other" autocomplete (wired; not saved yet)
+                item {
+                    AutoCompleteTextField(
+                        label = "Other (optional)",
+                        value = other,
+                        suggestions = lookupUi.otherSuggestions,
+                        onValueChange = {
+                            other = it
+                            lookupViewModel.onOtherQueryChange(it)
+                        },
+                        onItemSelected = { selected ->
+                            other = selected
+                            lookupViewModel.onOtherQueryChange(selected)
+                        },
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -313,8 +385,8 @@ fun AddProductScreen(navController: NavController, viewModel: HomeViewModel = vi
                                     }
 
                                     val product = Product(
-                                        name = cleanName,              // ⬅️ normalized
-                                        brand = cleanBrand,            // ⬅️ normalized
+                                        name = cleanName,              // ⬅️ from Strain autocomplete
+                                        brand = cleanBrand,            // ⬅️ from Brand autocomplete
                                         category = finalCategory,
                                         state = selectedState,
                                         strainType = strainType,
@@ -324,9 +396,12 @@ fun AddProductScreen(navController: NavController, viewModel: HomeViewModel = vi
                                     )
                                     // ⬇️ ensure we use the duplicate-safe path
                                     viewModel.addProductUnique(product)
+
+                                    // NOTE: `other` is captured above but not yet part of Product.
+                                    // When you add it to the model, pass it here as well.
                                 } else {
                                     validationMessage = when {
-                                        cleanName.isEmpty() -> "Please enter a product name"
+                                        cleanName.isEmpty() -> "Please enter a product/strain name"
                                         cleanBrand.isEmpty() -> "Please enter a brand"
                                         category.isEmpty() -> "Please select a category"
                                         category == "Other" && otherCategory.isBlank() -> "Please enter a custom category"
@@ -340,7 +415,6 @@ fun AddProductScreen(navController: NavController, viewModel: HomeViewModel = vi
                         ) {
                             Text("Add Product")
                         }
-
                     }
                 }
             }
