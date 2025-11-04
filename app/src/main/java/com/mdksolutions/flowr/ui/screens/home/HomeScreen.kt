@@ -43,7 +43,6 @@ import com.google.firebase.firestore.FirebaseFirestore
 import java.util.Locale
 import androidx.compose.material3.MenuAnchorType
 
-
 // ⬇️ New imports for handling back to exit app
 import androidx.activity.compose.BackHandler
 import android.app.Activity
@@ -157,6 +156,7 @@ private fun rememberActivityDictionary(): List<String> {
 
 /* -------------------- Collapsible helper -------------------- */
 
+@Suppress("SameParameterValue") // title is intentionally a param; currently always "Search & Filters"
 @Composable
 private fun CollapsibleSection(
     title: String,
@@ -313,7 +313,6 @@ private fun UserSearchBar(navController: NavController) {
         val handleLower = if (raw.startsWith("@")) raw.drop(1).lowercase() else qLower
 
         suspend fun tryFetchBy(fieldPreferred: String, fieldFallback: String?, textLower: String): List<UserHit> {
-            // 1) Prefer querying a lowercased field (e.g., displayName_lc / handle_lc)
             val preferred = try {
                 val snap = db.collection("users")
                     .orderBy(fieldPreferred)
@@ -333,7 +332,6 @@ private fun UserSearchBar(navController: NavController) {
 
             if (preferred.isNotEmpty()) return preferred
 
-            // 2) Fallback: query the original (case-sensitive) field, then filter client-side by lowercase
             if (fieldFallback == null) return emptyList()
             return try {
                 val snap = db.collection("users")
@@ -369,9 +367,12 @@ private fun UserSearchBar(navController: NavController) {
     DockedSearchBar(
         query = query,
         onQueryChange = { query = it },
-        onSearch = { active = true },
+        onSearch = { q ->           // use the param explicitly
+            query = q               // commit the query
+            active = false          // close the bar after submit
+        },
         active = active,
-        onActiveChange = { active = it },
+        onActiveChange = { isActive -> active = isActive },  // use the Boolean param
         placeholder = { Text("Search users by name or @handle") },
         leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
         trailingIcon = {
@@ -385,7 +386,7 @@ private fun UserSearchBar(navController: NavController) {
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
     ) {
-        if (isLoading && results.isEmpty()) {
+    if (isLoading && results.isEmpty()) {
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         }
         results.forEach { hit ->
@@ -808,7 +809,15 @@ fun ProductItem(product: Product, onClick: () -> Unit) {
             Text(text = product.name, style = MaterialTheme.typography.titleMedium)
             Text(text = "Brand: ${product.brand}")
             Text(text = "Category: ${product.category}")
-            Text(text = "State: ${toStateName(product.state)}") // Show canonical full name
+
+            // ✅ PATCH: Display multiple states or fallback to legacy single state
+            val statesText = when {
+                product.states != null && product.states.isNotEmpty() ->
+                    product.states.joinToString(", ") { toStateName(it) }
+                product.state.isNotBlank() -> toStateName(product.state)
+                else -> "—"
+            }
+            Text(text = "States: $statesText")
 
             if (product.strainType.isNotBlank()) {
                 Text(text = "Strain: ${product.strainType}")
