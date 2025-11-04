@@ -71,6 +71,9 @@ fun AddProductScreen(
     var potencyUsesMg by remember { mutableStateOf(false) } // false = %, true = mg
     var potencyText by remember { mutableStateOf("") }
 
+    // ⬇️ NEW: CBD input mirrors THC input and toggle
+    var cbdText by remember { mutableStateOf("") }
+
     LaunchedEffect(category) {
         val cat = (if (category == "Other") otherCategory else category).lowercase(Locale.US)
         potencyUsesMg = cat.contains("edible") || cat.contains("drink")
@@ -146,7 +149,7 @@ fun AddProductScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                 }
 
-                // ⬇️ REPLACED: Product Name -> Strain autocomplete (mirrors to name)
+                // ⬇️ Product Name -> Strain autocomplete (mirrors to name)
                 item {
                     AutoCompleteTextField(
                         label = "Product / Strain",
@@ -167,7 +170,7 @@ fun AddProductScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                 }
 
-                // ⬇️ REPLACED: Brand text field -> Brand autocomplete
+                // Brand autocomplete
                 item {
                     AutoCompleteTextField(
                         label = "Brand",
@@ -186,7 +189,7 @@ fun AddProductScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                 }
 
-                // ⬇️ NEW: Optional "Other" autocomplete (wired; not saved yet)
+                // Optional "Other" autocomplete (wired; not saved yet)
                 item {
                     AutoCompleteTextField(
                         label = "Other (optional)",
@@ -325,7 +328,7 @@ fun AddProductScreen(
                     }
                 }
 
-                // Potency mode + input
+                // Potency mode + inputs (THC + CBD)
                 item {
                     Spacer(modifier = Modifier.height(16.dp))
                     Text("Potency mode", style = MaterialTheme.typography.titleMedium)
@@ -343,7 +346,14 @@ fun AddProductScreen(
                             shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
                         ) { Text("Dosage (mg)") }
                     }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Applies to both THC and CBD.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
                     Spacer(Modifier.height(12.dp))
+
+                    // THC
                     OutlinedTextField(
                         value = potencyText,
                         onValueChange = { input ->
@@ -351,6 +361,19 @@ fun AddProductScreen(
                         },
                         label = { Text(if (potencyUsesMg) "Dosage (mg) – Optional" else "THC % – Optional") },
                         placeholder = { Text(if (potencyUsesMg) "e.g. 10" else "e.g. 18.5") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // ⬇️ NEW: CBD mirrors THC unit mode
+                    OutlinedTextField(
+                        value = cbdText,
+                        onValueChange = { input ->
+                            cbdText = input.replace("[^0-9.]".toRegex(), "")
+                        },
+                        label = { Text(if (potencyUsesMg) "CBD Dosage (mg) – Optional" else "CBD % – Optional") },
+                        placeholder = { Text(if (potencyUsesMg) "e.g. 10" else "e.g. 0.5") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -377,22 +400,37 @@ fun AddProductScreen(
                                     selectedState.isNotEmpty() &&
                                     strainType.isNotEmpty()
                                 ) {
-                                    val parsed = potencyText.toDoubleOrNull()
-                                    val safePotency = when {
-                                        parsed == null -> null
-                                        potencyUsesMg -> parsed.coerceIn(0.0, 10000.0)
-                                        else -> parsed.coerceIn(0.0, 100.0)
+                                    // THC parse
+                                    val parsedThc = potencyText.toDoubleOrNull()
+                                    val safeThc = when {
+                                        parsedThc == null -> null
+                                        potencyUsesMg -> parsedThc.coerceIn(0.0, 10000.0)
+                                        else -> parsedThc.coerceIn(0.0, 100.0)
+                                    }
+
+                                    // ⬇️ NEW: CBD parse (same bounds)
+                                    val parsedCbd = cbdText.toDoubleOrNull()
+                                    val safeCbd = when {
+                                        parsedCbd == null -> null
+                                        potencyUsesMg -> parsedCbd.coerceIn(0.0, 10000.0)
+                                        else -> parsedCbd.coerceIn(0.0, 100.0)
                                     }
 
                                     val product = Product(
-                                        name = cleanName,              // ⬅️ from Strain autocomplete
-                                        brand = cleanBrand,            // ⬅️ from Brand autocomplete
+                                        name = cleanName,              // from Strain autocomplete
+                                        brand = cleanBrand,            // from Brand autocomplete
                                         category = finalCategory,
                                         state = selectedState,
                                         strainType = strainType,
                                         potencyUsesMg = potencyUsesMg,
-                                        thcPercent = if (!potencyUsesMg) safePotency else null,
-                                        dosageMg = if (potencyUsesMg) safePotency else null
+
+                                        // THC
+                                        thcPercent = if (!potencyUsesMg) safeThc else null,
+                                        dosageMg   = if (potencyUsesMg)  safeThc else null,
+
+                                        // ⬇️ NEW: CBD mirrors THC
+                                        cbdPercent = if (!potencyUsesMg) safeCbd else null,
+                                        cbdMg      = if (potencyUsesMg)  safeCbd else null
                                     )
                                     // ⬇️ ensure we use the duplicate-safe path
                                     viewModel.addProductUnique(product)

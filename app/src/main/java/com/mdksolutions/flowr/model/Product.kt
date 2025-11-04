@@ -22,4 +22,6 @@ data class Product(
     val potencyUsesMg: Boolean? = null,   // true => show dosage (mg); false => show %; null => fallback to category heuristic
     val thcPercent: Double? = null,       // when potencyUsesMg == false
     val dosageMg: Double? = null,         // when potencyUsesMg == true
+    val cbdPercent: Double? = null,
+    val cbdMg: Double? = null
 )
