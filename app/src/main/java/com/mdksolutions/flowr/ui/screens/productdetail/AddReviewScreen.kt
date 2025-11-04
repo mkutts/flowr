@@ -264,7 +264,7 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
                         feels = newVal
                         feelsExpanded = currentFeelsToken.isNotBlank() && feelSuggestions.isNotEmpty()
                     },
-                    label = { Text("Feels (comma separated)") },
+                    label = { Text("It makes me feel...") },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                     modifier = Modifier
                         .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
