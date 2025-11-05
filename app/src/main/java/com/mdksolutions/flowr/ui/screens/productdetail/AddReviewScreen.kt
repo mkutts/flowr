@@ -390,7 +390,7 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
                         mentionQuery = q
                         mentionExpanded = q.isNotBlank() && mentionSuggestions.isNotEmpty()
                     },
-                    label = { Text("Your words") },
+                    label = { Text("Sober thoughts") },
                     placeholder = { Text("Type @ to tag someone (e.g., @alex)…") },
                     supportingText = {
                         val tooShort = reviewText.trim().length in 1 until minCharsToSubmit
