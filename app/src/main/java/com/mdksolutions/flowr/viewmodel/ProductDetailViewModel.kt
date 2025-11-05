@@ -156,7 +156,7 @@ class ProductDetailViewModel : ViewModel() {
     // ─────────────────────────────────────────────────────────────
 
     /** Begin editing a specific review */
-    fun startEditingReview(reviewId: String, currentText: String, currentRating: Int) {
+    fun startEditingReview(reviewId: String, currentText: String, currentRating: Double) {
         _uiState.update {
             it.copy(
                 editingReviewId = reviewId,

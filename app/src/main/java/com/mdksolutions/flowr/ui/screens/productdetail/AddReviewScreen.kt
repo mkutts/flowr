@@ -31,6 +31,9 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import androidx.core.content.edit
 import java.util.Locale // ✅ for category check
+import kotlin.math.round
+import com.mdksolutions.flowr.ui.components.LeafRatingBar
+import com.mdksolutions.flowr.R
 
 // ==== Storage for custom words (can't write to assets at runtime) ====
 private const val PREFS_NAME = "custom_words_prefs"
@@ -79,7 +82,7 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
     }
 
     // ✅ Form state (survives config changes)
-    var rating by rememberSaveable { mutableStateOf("") }
+    var rating by rememberSaveable { mutableDoubleStateOf(0.0) }
     var feels by rememberSaveable { mutableStateOf("") }
     var activity by rememberSaveable { mutableStateOf("") }
 
@@ -128,7 +131,7 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
             val token = "@[$display]($uid) "
             (prefix + sep + token)
         } else {
-            (current + " @[$display]($uid) ").trimStart()
+            ("$current @[$display]($uid) ").trimStart()
         }
     }
 
@@ -239,15 +242,22 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
             Text("Add Your Review", style = MaterialTheme.typography.titleLarge)
             Spacer(modifier = Modifier.height(16.dp))
 
-            OutlinedTextField(
-                value = rating,
-                onValueChange = { rating = it },
-                label = { Text("Rating (1-5)") },
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Number,
-                    imeAction = ImeAction.Next
-                ),
-                modifier = Modifier.fillMaxWidth()
+            // ⭐ Leaf-based rating with 0.5-step selection
+            Text("Rating", style = MaterialTheme.typography.labelLarge)
+            Spacer(Modifier.height(8.dp))
+
+                LeafRatingBar(
+                    rating = rating,
+                    onRatingChange = { rating = it },
+                    leafResId = R.drawable.cannabis_leaf,
+                    modifier = Modifier.padding(vertical = 4.dp)
+                )
+
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "${"%.1f".format(rating)} / 5",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -492,9 +502,10 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
                             validationMessage = "You must be logged in to submit a review"
                             return@Button
                         }
-                        val ratingVal = rating.toIntOrNull()
-                        if (ratingVal == null || ratingVal !in 1..5) {
-                            validationMessage = "Please enter a rating from 1 to 5"
+                        // ✅ Round to nearest 0.5 and validate bounds
+                        val chosen = roundToHalf(rating)
+                        if (chosen < 0.5 || chosen > 5.0) {
+                            validationMessage = "Please choose a rating from 0.5 to 5 (in 0.5 steps)"
                             return@Button
                         }
                         if (activity.isBlank()) {
@@ -542,7 +553,7 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
                                 productId = productId,
                                 userId = user.uid,
                                 userName = user.email ?: "Anonymous",
-                                rating = ratingVal,
+                                rating = chosen,
                                 feels = feelsList,
                                 activity = actVal,
                                 reportedTHC = if (!usesMg) safePotency else null,
@@ -568,3 +579,6 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
 fun loadJsonFromAssets(context: Context, fileName: String): String {
     return context.assets.open(fileName).bufferedReader().use { it.readText() }
 }
+
+// ✅ Round any double to the nearest 0.5 step
+private fun roundToHalf(x: Double): Double = round(x * 2.0) / 2.0
