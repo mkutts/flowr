@@ -2,7 +2,6 @@ package com.mdksolutions.flowr.repository
 
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
-import com.google.firebase.firestore.ktx.toObject   // ✅ KTX mapper
 import com.mdksolutions.flowr.model.Review
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -39,9 +38,30 @@ class ReviewRepository {
                 }
 
                 val reviews = snapshot?.documents?.mapNotNull { doc ->
-                    // ✅ KTX generic mapper + keep Firestore ID
-                    doc.toObject<Review>()?.copy(id = doc.id)
+                    val data = doc.data ?: return@mapNotNull null
+
+                    // Safely coerce rating to Double regardless of how it was stored
+                    val ratingAny = data["rating"]
+                    val rating = when (ratingAny) {
+                        is Number -> ratingAny.toDouble()
+                        else -> 0.0
+                    }
+
+                    Review(
+                        id = doc.id,
+                        productId = data["productId"] as? String ?: "",
+                        userId = data["userId"] as? String ?: "",
+                        userName = data["userName"] as? String ?: "",
+                        rating = rating,
+                        feels = (data["feels"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
+                        activity = data["activity"] as? String ?: "",
+                        reportedTHC = (data["reportedTHC"] as? Number)?.toDouble(),
+                        dosageMg = (data["dosageMg"] as? Number)?.toDouble(),
+                        reviewText = data["reviewText"] as? String,
+                        createdAt = (data["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis()
+                    )
                 } ?: emptyList()
+
 
                 trySend(reviews)
             }
