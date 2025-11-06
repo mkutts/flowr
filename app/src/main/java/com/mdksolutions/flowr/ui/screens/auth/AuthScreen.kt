@@ -40,6 +40,28 @@ fun AuthScreen(navController: NavController) {
     var passwordVisible by remember { mutableStateOf(false) } // 👈 toggle state
     val ctx = LocalContext.current // for toast
 
+    // ✅ NEW: If already authenticated, skip this screen
+    LaunchedEffect(Unit) {
+        val user = auth.currentUser
+        if (user != null) {
+            isLoading = true
+            db.collection("users").document(user.uid).get()
+                .addOnSuccessListener { document ->
+                    isLoading = false
+                    if (document.exists()) {
+                        navController.navigate("home") { popUpTo(0) }
+                    } else {
+                        navController.navigate("role_selection") { popUpTo(0) }
+                    }
+                }
+                .addOnFailureListener { e ->
+                    isLoading = false
+                    Log.e("AuthAutoBypass", "Failed to fetch user doc: ${e.message}")
+                    // Stay on this screen so the user can log in manually if Firestore failed
+                }
+        }
+    }
+
     // 🔁 Forgot password — enumeration-safe (always attempt send)
     fun sendPasswordReset() {
         val trimmed = email.trim()
