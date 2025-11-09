@@ -1,7 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- ⬇️ Required network permissions for ads -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission/ACCESS_NETWORK_STATE"/>
 
     <application
+        android:name=".FlowrApp"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -10,6 +17,17 @@
         android:roundIcon="@drawable/ic_splash_logo"
         android:supportsRtl="true"
         android:theme="@style/Theme.Flowr">
+
+        <!-- ✅ Resolve merge conflict between measurement-api and ads-lite -->
+        <property
+            android:name="android.adservices.AD_SERVICES_CONFIG"
+            android:resource="@xml/gma_ad_services_config"
+            tools:replace="android:resource" />
+
+        <!-- ✅ AdMob test app ID -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-3940256099942544~3347511713"/>
 
         <!-- Disable/enable via buildType manifestPlaceholders -->
         <meta-data

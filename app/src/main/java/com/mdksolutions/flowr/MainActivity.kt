@@ -23,6 +23,9 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
+// ⬇️ import the reusable banner
+import com.mdksolutions.flowr.ui.components.BannerAd
+
 class MainActivity : ComponentActivity() {
 
     // Keep a reference so we can navigate from onNewIntent
@@ -66,11 +69,27 @@ class MainActivity : ComponentActivity() {
                 true -> {
                     navControllerRef = rememberNavController()
                     val currentTheme = remember { mutableStateOf(FlowrThemeType.DARK_LUXURY) }
-                    AppNavGraph(navController = navControllerRef, themeType = currentTheme.value)
 
-                    // Handle deep link when app is launched cold
-                    LaunchedEffect(Unit) {
-                        intent?.let { handleResetLink(navControllerRef, it) }
+                    // 🔻 Wrap your app in a Scaffold with a bottom bar for the banner.
+                    Scaffold(
+                        bottomBar = {
+                            Surface(tonalElevation = 1.dp) {
+                                BannerAd()
+                            }
+                        }
+                    ) { innerPadding ->
+                        // Keep your existing root content; just respect the bottom inset
+                        Box(modifier = Modifier.padding(innerPadding)) {
+                            AppNavGraph(
+                                navController = navControllerRef,
+                                themeType = currentTheme.value
+                            )
+                        }
+
+                        // Handle deep link when app is launched cold
+                        LaunchedEffect(Unit) {
+                            intent?.let { handleResetLink(navControllerRef, it) }
+                        }
                     }
                 }
                 false -> {
