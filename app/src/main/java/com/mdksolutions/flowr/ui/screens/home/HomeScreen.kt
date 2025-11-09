@@ -48,6 +48,11 @@ import androidx.activity.compose.BackHandler
 import android.app.Activity
 import androidx.compose.material3.HorizontalDivider
 
+// NEW
+import android.widget.Toast
+import androidx.compose.material.icons.filled.Favorite
+import com.mdksolutions.flowr.ads.RewardedAds
+
 /* -------------------- State lists & helpers -------------------- */
 
 // Canonical pairs for all 50 states + DC
@@ -458,10 +463,20 @@ fun HomeScreen(
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         floatingActionButton = {
-            FloatingActionButton(onClick = { navController.navigate("add_product") }) {
-                Icon(Icons.Default.Add, contentDescription = "Add Product")
+            val act = LocalContext.current as? Activity
+            FloatingActionButton(
+                onClick = {
+                    act?.let { a ->
+                        RewardedAds.show(a) { r ->
+                            Toast.makeText(a, "Thanks! +${r.amount} ${r.type}", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            ) {
+                Icon(Icons.Filled.Favorite, contentDescription = "I love Flowr")
             }
         }
+
 
     ) { padding ->
         Column(

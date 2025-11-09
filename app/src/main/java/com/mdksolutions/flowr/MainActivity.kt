@@ -23,27 +23,24 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
-// ⬇️ import the reusable banner
+// Ads
 import com.mdksolutions.flowr.ui.components.BannerAd
+import com.mdksolutions.flowr.ads.RewardedAds
 
 class MainActivity : ComponentActivity() {
 
-    // Keep a reference so we can navigate from onNewIntent
     private lateinit var navControllerRef: NavHostController
 
-    // ✅ Hosts (no scheme) we accept
     private val resetHosts = setOf(
-        "flowr-f5248.web.app",          // your customized in-app handler
-        "flowr-f5248.firebaseapp.com"   // fallback for default Firebase links
+        "flowr-f5248.web.app",
+        "flowr-f5248.firebaseapp.com"
     )
 
-    // ✅ Paths we accept
     private val acceptedPathPrefixes = listOf(
-        "/auth/reset",          // your customized path
-        "/__/auth/action"       // default Firebase email action path
+        "/auth/reset",
+        "/__/auth/action"
     )
 
-    // Avoid handling the same link twice (cold start + onNewIntent, etc.)
     private var lastHandledDeepLink: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -54,31 +51,34 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         setContent {
+            val activity = this@MainActivity
+
+            // Preload a rewarded ad once UI starts (Home FAB will use it)
+            LaunchedEffect(Unit) { RewardedAds.load(activity) }
+
             var playServicesOk by remember { mutableStateOf<Boolean?>(null) }
 
             LaunchedEffect(Unit) {
-                playServicesOk = ensurePlayServices(this@MainActivity)
+                playServicesOk = ensurePlayServices(activity)
             }
-
             LaunchedEffect(playServicesOk) {
                 if (playServicesOk != null) keepSplash = false
             }
 
             when (playServicesOk) {
-                null -> { /* native splash is showing */ }
+                null -> { /* splash showing */ }
                 true -> {
                     navControllerRef = rememberNavController()
                     val currentTheme = remember { mutableStateOf(FlowrThemeType.DARK_LUXURY) }
 
-                    // 🔻 Wrap your app in a Scaffold with a bottom bar for the banner.
                     Scaffold(
                         bottomBar = {
                             Surface(tonalElevation = 1.dp) {
-                                BannerAd()
+                                // ── Banner ad pinned at the very bottom ──
+                                BannerAd(modifier = Modifier.fillMaxWidth())
                             }
                         }
                     ) { innerPadding ->
-                        // Keep your existing root content; just respect the bottom inset
                         Box(modifier = Modifier.padding(innerPadding)) {
                             AppNavGraph(
                                 navController = navControllerRef,
@@ -86,7 +86,7 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        // Handle deep link when app is launched cold
+                        // Handle deep link on cold start
                         LaunchedEffect(Unit) {
                             intent?.let { handleResetLink(navControllerRef, it) }
                         }
@@ -134,7 +134,6 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        // Guard: https + known host + known path
         if (uri.scheme != "https") return
         val host = uri.host ?: return
         if (host !in resetHosts) return
