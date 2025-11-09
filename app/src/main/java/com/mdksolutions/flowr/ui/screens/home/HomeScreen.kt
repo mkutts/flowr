@@ -324,7 +324,7 @@ private fun UserSearchBar(navController: NavController) {
                 snap.documents.mapNotNull { d ->
                     val uid = d.id
                     val name = (d.get("displayName") as? String)?.ifBlank { null } ?: return@mapNotNull null
-                    val handle = (d.get("handle") as? String)?.ifBlank { null }
+                    val handle = (d.get("username") as? String)?.ifBlank { null }   // ← changed
                     val photo = (d.get("photoUrl") as? String)?.ifBlank { null }
                     UserHit(uid, name, handle, photo)
                 }
@@ -344,7 +344,7 @@ private fun UserSearchBar(navController: NavController) {
                 snap.documents.mapNotNull { d ->
                     val uid = d.id
                     val name = (d.get("displayName") as? String)?.ifBlank { null } ?: return@mapNotNull null
-                    val handle = (d.get("handle") as? String)?.ifBlank { null }
+                    val handle = (d.get("username") as? String)?.ifBlank { null }   // ← changed
                     val photo = (d.get("photoUrl") as? String)?.ifBlank { null }
                     UserHit(uid, name, handle, photo)
                 }.filter { hit ->
@@ -354,8 +354,10 @@ private fun UserSearchBar(navController: NavController) {
             } catch (_: Exception) { emptyList() }
         }
 
+        // name search unchanged
         val nameHits = tryFetchBy("displayName_lc", "displayName", qLower)
-        val handleHits = tryFetchBy("handle_lc", "handle", handleLower)
+        // handle → username search (uses existing usernameLower field)
+        val handleHits = tryFetchBy("usernameLower", "username", handleLower)   // ← changed
 
         results = (nameHits + handleHits)
             .distinctBy { it.uid }
@@ -367,13 +369,10 @@ private fun UserSearchBar(navController: NavController) {
     DockedSearchBar(
         query = query,
         onQueryChange = { query = it },
-        onSearch = { q ->           // use the param explicitly
-            query = q               // commit the query
-            active = false          // close the bar after submit
-        },
+        onSearch = { q -> query = q; active = false },
         active = active,
-        onActiveChange = { isActive -> active = isActive },  // use the Boolean param
-        placeholder = { Text("Search users by name or @handle") },
+        onActiveChange = { isActive -> active = isActive },
+        placeholder = { Text("Search users by name or @username") }, // ← changed
         leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
         trailingIcon = {
             if (query.isNotEmpty()) {
@@ -386,7 +385,7 @@ private fun UserSearchBar(navController: NavController) {
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
     ) {
-    if (isLoading && results.isEmpty()) {
+        if (isLoading && results.isEmpty()) {
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         }
         results.forEach { hit ->
