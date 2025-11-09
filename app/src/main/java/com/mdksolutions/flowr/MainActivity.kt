@@ -23,10 +23,9 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
-// ⬇️ Ads imports
+// Ads
 import com.mdksolutions.flowr.ui.components.BannerAd
 import com.mdksolutions.flowr.ads.RewardedAds
-import android.widget.Toast
 
 class MainActivity : ComponentActivity() {
 
@@ -54,7 +53,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val activity = this@MainActivity
 
-            // Preload a rewarded ad once UI starts
+            // Preload a rewarded ad once UI starts (Home FAB will use it)
             LaunchedEffect(Unit) { RewardedAds.load(activity) }
 
             var playServicesOk by remember { mutableStateOf<Boolean?>(null) }
@@ -75,37 +74,8 @@ class MainActivity : ComponentActivity() {
                     Scaffold(
                         bottomBar = {
                             Surface(tonalElevation = 1.dp) {
-                                Column(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    // ── Bottom nav bar with rewarded button ──
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(56.dp)
-                                            .padding(horizontal = 16.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.Center
-                                    ) {
-                                        Button(
-                                            onClick = {
-                                                RewardedAds.show(activity) { reward ->
-                                                    Toast.makeText(
-                                                        activity,
-                                                        "Thanks! +${reward.amount} ${reward.type}",
-                                                        Toast.LENGTH_SHORT
-                                                    ).show()
-                                                }
-                                            }
-                                        ) {
-                                            Text(text = "I \u2665 Flowr") // "I ♥ Flowr"
-                                        }
-                                    }
-
-                                    // ── Banner ad pinned at very bottom ──
-                                    BannerAd(modifier = Modifier.fillMaxWidth())
-                                }
+                                // ── Banner ad pinned at the very bottom ──
+                                BannerAd(modifier = Modifier.fillMaxWidth())
                             }
                         }
                     ) { innerPadding ->
