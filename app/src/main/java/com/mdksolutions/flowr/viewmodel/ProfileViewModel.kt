@@ -27,13 +27,13 @@ data class ProfileUiState(
     val error: String? = null,
     val profile: UserProfile? = null,
     val reviewCount: Int = 0,
-    val isUploading: Boolean = false           // ⬅️ NEW: show upload progress in UI
+    val isUploading: Boolean = false           // ⬅️ show upload progress in UI
 )
 
 class ProfileViewModel : ViewModel() {
     private val auth = FirebaseAuth.getInstance()
     private val db = FirebaseFirestore.getInstance()
-    private val storage = FirebaseStorage.getInstance()   // ⬅️ NEW
+    private val storage = FirebaseStorage.getInstance()
 
     private val _uiState = MutableStateFlow(ProfileUiState())
     val uiState: StateFlow<ProfileUiState> = _uiState
@@ -73,10 +73,9 @@ class ProfileViewModel : ViewModel() {
                         ?: UserProfile(uid = uid)
 
                     // Backfill username fields if missing/blank
-                    if (loaded.username.isBlank() || loaded.usernameLower.isBlank()) {
+                    val ensuredUsernames = if (loaded.username.isBlank() || loaded.usernameLower.isBlank()) {
                         val (uname, lower) = fetchClaimedUsername()
                         if (uname.isNotBlank()) {
-                            // Merge back so future reads have it populated
                             docRef.set(
                                 mapOf("username" to uname, "usernameLower" to lower),
                                 SetOptions.merge()
@@ -88,18 +87,40 @@ class ProfileViewModel : ViewModel() {
                     } else {
                         loaded
                     }
+
+                    // ✅ Backfill displayName_lc if missing
+                    val existingLc = snap.getString("displayName_lc").orEmpty()
+                    val displayNameClean = ensuredUsernames.displayName.trim()
+                    if (displayNameClean.isNotEmpty() && existingLc.isBlank()) {
+                        docRef.set(
+                            mapOf("displayName_lc" to displayNameClean.lowercase()),
+                            SetOptions.merge()
+                        ).awaitk()
+                    }
+
+                    ensuredUsernames
                 } else {
                     // Seed brand-new profile, including claimed username if present
                     val (uname, lower) = fetchClaimedUsername()
+                    val cleanName = (user.displayName ?: user.email ?: "").trim()
+
                     val seeded = UserProfile(
                         uid = uid,
-                        displayName = user.displayName ?: user.email ?: "",
+                        displayName = cleanName,
                         email = user.email ?: "",
                         photoUrl = user.photoUrl?.toString(),
                         username = uname,
                         usernameLower = lower
                     )
+                    // Write the main doc
                     docRef.set(seeded).awaitk()
+                    // ✅ Also persist the lowercase display name for search
+                    if (cleanName.isNotEmpty()) {
+                        docRef.set(
+                            mapOf("displayName_lc" to cleanName.lowercase()),
+                            SetOptions.merge()
+                        ).awaitk()
+                    }
                     seeded
                 }
 
@@ -121,15 +142,23 @@ class ProfileViewModel : ViewModel() {
         }
     }
 
-
+    // ✅ Update both displayName and displayName_lc
     fun updateDisplayName(newName: String) {
         val p = _uiState.value.profile ?: return
+        val clean = newName.trim()
         viewModelScope.launch {
             try {
                 db.collection("users").document(p.uid)
-                    .update(mapOf("displayName" to newName))
+                    .update(
+                        mapOf(
+                            "displayName" to clean,
+                            "displayName_lc" to clean.lowercase()
+                        )
+                    )
                     .awaitk()
-                _uiState.update { it.copy(profile = it.profile?.copy(displayName = newName)) }
+                _uiState.update {
+                    it.copy(profile = it.profile?.copy(displayName = clean))
+                }
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.message) }
             }
@@ -161,17 +190,13 @@ class ProfileViewModel : ViewModel() {
 
         viewModelScope.launch {
             try {
-                // 1) Atomically claim the new username; rules must have:
-                //    allow create: if !exists(...)
-                //    allow update: if false
+                // 1) Atomically claim the new username
                 val claimRef = db.collection("usernames").document(newLower)
                 val claimData = mapOf(
                     "uid" to uid,
                     "username" to trimmed,
                     "createdAt" to System.currentTimeMillis()
                 )
-                // Using set(): if the doc already exists, this is an UPDATE and will be
-                // denied by rules (PERMISSION_DENIED). If it doesn't exist, it's a CREATE and allowed.
                 claimRef.set(claimData).awaitk()
 
                 // 2) Update the user's profile with the new username
@@ -206,14 +231,14 @@ class ProfileViewModel : ViewModel() {
         }
     }
 
-    // ⬇️ NEW: Upload avatar to Storage and save download URL in /users/{uid}.photoUrl
+    // Upload avatar to Storage and save download URL in /users/{uid}.photoUrl
     fun uploadProfilePhoto(uri: Uri) {
         val user = auth.currentUser ?: run {
             _uiState.update { it.copy(error = "Not signed in") }
             return
         }
         val uid = user.uid
-        val ref = storage.reference.child("user_photos/$uid/avatar.jpg") // <-- folder path
+        val ref = storage.reference.child("user_photos/$uid/avatar.jpg")
 
         _uiState.update { it.copy(isUploading = true, error = null) }
 
@@ -239,7 +264,6 @@ class ProfileViewModel : ViewModel() {
             }
         }
     }
-
 
     fun signOut() {
         auth.signOut()
