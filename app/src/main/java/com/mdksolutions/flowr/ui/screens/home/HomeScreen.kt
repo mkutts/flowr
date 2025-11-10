@@ -464,19 +464,37 @@ fun HomeScreen(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         floatingActionButton = {
             val act = LocalContext.current as? Activity
+            var showAdPrompt by remember { mutableStateOf(false) }
+
+            // The FAB
             FloatingActionButton(
-                onClick = {
-                    act?.let { a ->
-                        RewardedAds.show(a) { r ->
-                            Toast.makeText(a, "Thanks! +${r.amount} ${r.type}", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                }
+                onClick = { showAdPrompt = true }
             ) {
                 Icon(Icons.Filled.Favorite, contentDescription = "I love Flowr")
             }
-        }
 
+            // Confirm dialog
+            if (showAdPrompt) {
+                AlertDialog(
+                    onDismissRequest = { showAdPrompt = false },
+                    title = { Text("Support Flowr") },
+                    text = { Text("Help keep our servers up by watching an ad.") },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                showAdPrompt = false
+                                act?.let { a ->
+                                    RewardedAds.show(a) { /* reward -> handle if you want */ }
+                                }
+                            }
+                        ) { Text("Watch Ad") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showAdPrompt = false }) { Text("Not now") }
+                    }
+                )
+            }
+        }
 
     ) { padding ->
         Column(
