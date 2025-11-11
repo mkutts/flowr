@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.mdksolutions.flowr.viewmodel.SuggestionViewModel
+import androidx.compose.material3.MenuAnchorType // ⬅️ NEW import
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,12 +65,14 @@ fun SuggestionScreen(
             var expanded by remember { mutableStateOf(false) }
             ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
                 TextField(
-                    modifier = Modifier.menuAnchor().fillMaxWidth(),
+                    modifier = Modifier
+                        .menuAnchor(type = MenuAnchorType.PrimaryNotEditable, enabled = true) // ⬅️ UPDATED
+                        .fillMaxWidth(),
                     value = ui.type,
                     onValueChange = {},
                     readOnly = true,
                     label = { Text("Type") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) }
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) }
                 )
                 ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                     DropdownMenuItem(
@@ -109,13 +112,15 @@ fun SuggestionScreen(
                 var sevExpanded by remember { mutableStateOf(false) }
                 ExposedDropdownMenuBox(expanded = sevExpanded, onExpandedChange = { sevExpanded = it }) {
                     TextField(
-                        modifier = Modifier.menuAnchor().fillMaxWidth(),
+                        modifier = Modifier
+                            .menuAnchor(type = MenuAnchorType.PrimaryNotEditable, enabled = true) // ⬅️ UPDATED
+                            .fillMaxWidth(),
                         value = ui.severity,
                         onValueChange = {},
                         readOnly = true,
                         label = { Text("Severity") },
                         leadingIcon = { Icon(Icons.Outlined.BugReport, null) },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(sevExpanded) }
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = sevExpanded) }
                     )
                     ExposedDropdownMenu(expanded = sevExpanded, onDismissRequest = { sevExpanded = false }) {
                         listOf("Low","Med","High","Critical").forEach { level ->
