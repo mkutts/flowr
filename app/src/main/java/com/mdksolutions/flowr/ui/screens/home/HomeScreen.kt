@@ -12,7 +12,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Close
@@ -49,7 +48,6 @@ import android.app.Activity
 import androidx.compose.material3.HorizontalDivider
 
 // NEW
-import android.widget.Toast
 import androidx.compose.material.icons.filled.Favorite
 import com.mdksolutions.flowr.ads.RewardedAds
 
@@ -371,24 +369,34 @@ private fun UserSearchBar(navController: NavController) {
         isLoading = false
     }
 
+    // --- NEW API: DockedSearchBar with inputField slot ---
     DockedSearchBar(
-        query = query,
-        onQueryChange = { query = it },
-        onSearch = { q -> query = q; active = false },
-        active = active,
-        onActiveChange = { isActive -> active = isActive },
-        placeholder = { Text("Search users by name or @username") }, // ← changed
-        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-        trailingIcon = {
-            if (query.isNotEmpty()) {
-                IconButton(onClick = { query = "" }) {
-                    Icon(Icons.Filled.Close, contentDescription = "Clear")
-                }
-            }
-        },
+        expanded = active,
+        onExpandedChange = { isActive -> active = isActive },
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = 16.dp),
+        inputField = {
+            SearchBarDefaults.InputField(
+                query = query,
+                onQueryChange = { query = it },
+                onSearch = { q ->
+                    query = q
+                    active = false
+                },
+                expanded = active,
+                onExpandedChange = { isActive -> active = isActive },
+                placeholder = { Text("Search users by name or @username") }, // ← changed
+                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (query.isNotEmpty()) {
+                        IconButton(onClick = { query = "" }) {
+                            Icon(Icons.Filled.Close, contentDescription = "Clear")
+                        }
+                    }
+                }
+            )
+        }
     ) {
         if (isLoading && results.isEmpty()) {
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
