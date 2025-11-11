@@ -18,7 +18,7 @@ import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 
-// ⬇️ NEW: imports for lookup VM + autocomplete
+// Lookup VM + autocomplete
 import com.mdksolutions.flowr.viewmodel.LookupViewModel
 import com.mdksolutions.flowr.ui.components.AutoCompleteTextField
 
@@ -27,21 +27,15 @@ import com.mdksolutions.flowr.ui.components.AutoCompleteTextField
 fun AddProductScreen(
     navController: NavController,
     viewModel: HomeViewModel = viewModel(),
-    // ⬇️ NEW: second VM for lookups (Firestore-backed)
     lookupViewModel: LookupViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
     // ---- Local screen state ----
-    // We’ll treat "name" as the actual Product Name stored to Firestore,
-    // but it’s now driven by the Strain autocomplete below.
     var name by remember { mutableStateOf("") }
-
-    // Brand/Strain/Other are user inputs that drive autocomplete & saving.
     var brand by remember { mutableStateOf("") }
     var strain by remember { mutableStateOf("") } // mirrors `name`
-    var other by remember { mutableStateOf("") }  // optional; not yet saved to Product model
 
     // --- Category dropdown ---
     val categoryOptions = listOf("Flower", "Edible", "Vape", "Concentrate", "Pre-Roll", "Other")
@@ -71,7 +65,7 @@ fun AddProductScreen(
     var potencyUsesMg by remember { mutableStateOf(false) } // false = %, true = mg
     var potencyText by remember { mutableStateOf("") }
 
-    // ⬇️ NEW: CBD input mirrors THC input and toggle
+    // CBD mirrors THC unit mode
     var cbdText by remember { mutableStateOf("") }
 
     LaunchedEffect(category) {
@@ -103,10 +97,10 @@ fun AddProductScreen(
     // ----- SCROLL + INSETS FIX -----
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
-    // ⬇️ NEW: collect lookup UI state
+    // Lookup UI state
     val lookupUi = lookupViewModel.ui.collectAsState().value
 
-    // ⬇️ NEW: keep local fields synced with VM query (so dropdowns reflect typing + selections)
+    // Keep local fields synced with VM query (brand/strain only)
     LaunchedEffect(lookupUi.brandQuery) {
         if (lookupUi.brandQuery != brand) brand = lookupUi.brandQuery
     }
@@ -116,15 +110,11 @@ fun AddProductScreen(
             name = lookupUi.strainQuery // mirror into Product name
         }
     }
-    LaunchedEffect(lookupUi.otherQuery) {
-        if (lookupUi.otherQuery != other) other = lookupUi.otherQuery
-    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Add Product") },
-                // navigationIcon = { /* optional back button */ },
                 scrollBehavior = scrollBehavior
             )
         },
@@ -135,9 +125,8 @@ fun AddProductScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .imePadding()  // keyboard-safe
+                .imePadding()
         ) {
-            // Put the whole form into a scrollable LazyColumn
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
@@ -149,7 +138,7 @@ fun AddProductScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                 }
 
-                // ⬇️ Product Name -> Strain autocomplete (mirrors to name)
+                // Product / Strain (drives Product.name)
                 item {
                     AutoCompleteTextField(
                         label = "Product / Strain",
@@ -157,12 +146,12 @@ fun AddProductScreen(
                         suggestions = lookupUi.strainSuggestions,
                         onValueChange = {
                             strain = it
-                            name = it // keep Product name in sync
+                            name = it
                             lookupViewModel.onStrainQueryChange(it)
                         },
                         onItemSelected = { selected ->
                             strain = selected
-                            name = selected // keep Product name in sync
+                            name = selected
                             lookupViewModel.onStrainQueryChange(selected)
                         },
                         modifier = Modifier.fillMaxWidth()
@@ -170,7 +159,7 @@ fun AddProductScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                 }
 
-                // Brand autocomplete
+                // Brand
                 item {
                     AutoCompleteTextField(
                         label = "Brand",
@@ -183,25 +172,6 @@ fun AddProductScreen(
                         onItemSelected = { selected ->
                             brand = selected
                             lookupViewModel.onBrandQueryChange(selected)
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                }
-
-                // Optional "Other" autocomplete (wired; not saved yet)
-                item {
-                    AutoCompleteTextField(
-                        label = "Other (optional)",
-                        value = other,
-                        suggestions = lookupUi.otherSuggestions,
-                        onValueChange = {
-                            other = it
-                            lookupViewModel.onOtherQueryChange(it)
-                        },
-                        onItemSelected = { selected ->
-                            other = selected
-                            lookupViewModel.onOtherQueryChange(selected)
                         },
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -347,10 +317,7 @@ fun AddProductScreen(
                         ) { Text("Dosage (mg)") }
                     }
                     Spacer(Modifier.height(8.dp))
-                    Text(
-                        "Applies to both THC and CBD.",
-                        style = MaterialTheme.typography.bodySmall
-                    )
+                    Text("Applies to both THC and CBD.", style = MaterialTheme.typography.bodySmall)
                     Spacer(Modifier.height(12.dp))
 
                     // THC
@@ -366,7 +333,7 @@ fun AddProductScreen(
                     )
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // ⬇️ NEW: CBD mirrors THC unit mode
+                    // CBD mirrors THC unit mode
                     OutlinedTextField(
                         value = cbdText,
                         onValueChange = { input ->
@@ -390,7 +357,6 @@ fun AddProductScreen(
                                 val finalCategory = if (category == "Other") otherCategory.trim() else category
                                 val categoryValid = finalCategory.isNotEmpty()
 
-                                // 🔒 Normalize name/brand so keys match exactly (no dupes from spaces/case)
                                 val cleanName  = name.trim().replace("\\s+".toRegex(), " ")
                                 val cleanBrand = brand.trim().replace("\\s+".toRegex(), " ")
 
@@ -400,7 +366,6 @@ fun AddProductScreen(
                                     selectedState.isNotEmpty() &&
                                     strainType.isNotEmpty()
                                 ) {
-                                    // THC parse
                                     val parsedThc = potencyText.toDoubleOrNull()
                                     val safeThc = when {
                                         parsedThc == null -> null
@@ -408,7 +373,6 @@ fun AddProductScreen(
                                         else -> parsedThc.coerceIn(0.0, 100.0)
                                     }
 
-                                    // ⬇️ NEW: CBD parse (same bounds)
                                     val parsedCbd = cbdText.toDoubleOrNull()
                                     val safeCbd = when {
                                         parsedCbd == null -> null
@@ -417,26 +381,18 @@ fun AddProductScreen(
                                     }
 
                                     val product = Product(
-                                        name = cleanName,              // from Strain autocomplete
-                                        brand = cleanBrand,            // from Brand autocomplete
+                                        name = cleanName,
+                                        brand = cleanBrand,
                                         category = finalCategory,
                                         state = selectedState,
                                         strainType = strainType,
                                         potencyUsesMg = potencyUsesMg,
-
-                                        // THC
                                         thcPercent = if (!potencyUsesMg) safeThc else null,
                                         dosageMg   = if (potencyUsesMg)  safeThc else null,
-
-                                        // ⬇️ NEW: CBD mirrors THC
                                         cbdPercent = if (!potencyUsesMg) safeCbd else null,
                                         cbdMg      = if (potencyUsesMg)  safeCbd else null
                                     )
-                                    // ⬇️ ensure we use the duplicate-safe path
                                     viewModel.addProductUnique(product)
-
-                                    // NOTE: `other` is captured above but not yet part of Product.
-                                    // When you add it to the model, pass it here as well.
                                 } else {
                                     validationMessage = when {
                                         cleanName.isEmpty() -> "Please enter a product/strain name"
