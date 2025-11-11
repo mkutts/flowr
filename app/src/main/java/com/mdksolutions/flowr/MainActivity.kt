@@ -72,9 +72,9 @@ class MainActivity : ComponentActivity() {
                     val currentTheme = remember { mutableStateOf(FlowrThemeType.DARK_LUXURY) }
 
                     Scaffold(
-                        bottomBar = {
+                        // ✅ Banner ad always at the top
+                        topBar = {
                             Surface(tonalElevation = 1.dp) {
-                                // ── Banner ad pinned at the very bottom ──
                                 BannerAd(modifier = Modifier.fillMaxWidth())
                             }
                         }
