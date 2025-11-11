@@ -133,11 +133,6 @@ fun AddProductScreen(
                     .padding(horizontal = 16.dp),
                 contentPadding = PaddingValues(top = 12.dp, bottom = 28.dp)
             ) {
-                item {
-                    Text("Add Product", style = MaterialTheme.typography.titleLarge)
-                    Spacer(modifier = Modifier.height(16.dp))
-                }
-
                 // Product / Strain (drives Product.name)
                 item {
                     AutoCompleteTextField(
