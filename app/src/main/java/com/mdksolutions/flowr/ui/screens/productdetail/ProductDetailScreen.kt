@@ -121,7 +121,7 @@ fun ProductDetailScreen(navController: NavController, productId: String?) {
                     }
                     val avgRatingFromReviews by remember(reviews) {
                         mutableStateOf(
-                            reviews.map { it.rating.toDouble() }
+                            reviews.map { it.rating }
                                 .takeIf { it.isNotEmpty() }
                                 ?.average()
                         )
