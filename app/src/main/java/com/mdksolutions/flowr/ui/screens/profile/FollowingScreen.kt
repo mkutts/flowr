@@ -25,11 +25,6 @@ import coil.compose.rememberAsyncImagePainter
 import com.mdksolutions.flowr.model.UserProfile
 import com.mdksolutions.flowr.viewmodel.FollowingViewModel
 import androidx.compose.foundation.text.KeyboardOptions // <-- Add this import
-import androidx.compose.material3.TextField // Or whatever TextField you are using
-import androidx.compose.runtime.*
-import androidx.compose.ui.text.input.KeyboardType
-
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,8 +41,8 @@ fun FollowingScreen(
     val filtered = remember(query, ui.users) {
         val q = query.trim()
         if (q.isEmpty()) ui.users else ui.users.filter { user ->
-            val name = user.displayName.orEmpty()
-            val email = user.email.orEmpty()
+            val name = user.displayName
+            val email = user.email
             name.contains(q, ignoreCase = true) ||
                     email.contains(q, ignoreCase = true)
         }
