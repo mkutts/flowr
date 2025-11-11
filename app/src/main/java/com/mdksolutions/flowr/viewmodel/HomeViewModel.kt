@@ -47,22 +47,6 @@ class HomeViewModel : ViewModel() {
 
     // --- Actions ---
 
-    // Existing add (kept for legacy calls)
-    fun addProduct(product: Product) {
-        viewModelScope.launch {
-            try {
-                val success = repo.addProduct(product)
-                _baseState.update {
-                    it.copy(
-                        errorMessage = if (success) "Product added successfully" else "Failed to add product"
-                    )
-                }
-            } catch (e: Exception) {
-                _baseState.update { it.copy(errorMessage = "Error: ${e.message}") }
-            }
-        }
-    }
-
     // NEW: normalized key builder for uniqueness (brand + name), unicode-safe
     private fun normalizeKeyPart(s: String): String =
         s.trim()
