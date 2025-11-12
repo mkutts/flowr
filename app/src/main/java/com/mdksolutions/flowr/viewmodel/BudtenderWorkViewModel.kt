@@ -48,7 +48,7 @@ class BudtenderWorkViewModel : ViewModel() {
                     null
 
                 val finalWork = work ?: BudtenderWork(
-                    schedule = WEEK_DAYS.associateWith { emptyList<WorkShift>() }
+                    schedule = WEEK_DAYS.associateWith { emptyList() }
                 )
                 _uiState.update { it.copy(isLoading = false, work = finalWork) }
             } catch (e: Exception) {

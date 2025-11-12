@@ -11,7 +11,7 @@ class SuggestionRepository(
     private val col = db.collection("suggestions")
 
     suspend fun create(s: Suggestion): String {
-        val id = if (s.id.isBlank()) UUID.randomUUID().toString() else s.id
+        val id = s.id.ifBlank { UUID.randomUUID().toString() }
         val toSave = s.copy(id = id)
         col.document(id).set(toSave).await()
         return id
