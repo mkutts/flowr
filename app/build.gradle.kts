@@ -6,6 +6,17 @@ plugins {
     id("com.google.firebase.crashlytics")
 }
 
+/* --- Signing props (works in Kotlin DSL) --- */
+val flowrStoreFile: String? = (project.findProperty("FLOWR_STORE_FILE") as String?)
+    ?: System.getenv("FLOWR_STORE_FILE")
+val flowrStorePassword: String? = (project.findProperty("FLOWR_STORE_PASSWORD") as String?)
+    ?: System.getenv("FLOWR_STORE_PASSWORD")
+val flowrKeyAlias: String? = (project.findProperty("FLOWR_KEY_ALIAS") as String?)
+    ?: System.getenv("FLOWR_KEY_ALIAS")
+val flowrKeyPassword: String? = (project.findProperty("FLOWR_KEY_PASSWORD") as String?)
+    ?: System.getenv("FLOWR_KEY_PASSWORD")
+val hasSigning = !flowrStoreFile.isNullOrBlank()
+
 android {
     namespace = "com.mdksolutions.flowr"
     compileSdk = 36
@@ -13,32 +24,43 @@ android {
     defaultConfig {
         applicationId = "com.mdksolutions.flowr"
         minSdk = 23
-        targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
-
+        targetSdk = 35
+        versionCode = 4
+        versionName = "1.0.3"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    // 🔐 Signing config using gradle.properties/env
+    signingConfigs {
+        if (hasSigning) {
+            create("release") {
+                storeFile = file(flowrStoreFile!!)
+                storePassword = flowrStorePassword
+                keyAlias = flowrKeyAlias
+                keyPassword = flowrKeyPassword
+            }
+        }
     }
 
     buildTypes {
         debug {
-            // ✅ Speed up DEBUG startup (skip analytics/crash init)
             manifestPlaceholders["firebase_crashlytics_collection_enabled"] = "false"
             manifestPlaceholders["firebase_analytics_collection_deactivated"] = "true"
         }
         release {
-            // Keeping your current setting (no minify) to avoid behavioral changes
-            isMinifyEnabled = false
+            // ✅ Enable code shrinking/obfuscation for Play Store builds
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // ✅ Enable collection in release
             manifestPlaceholders["firebase_crashlytics_collection_enabled"] = "true"
             manifestPlaceholders["firebase_analytics_collection_deactivated"] = "false"
-            // If/when you want smaller APKs, also set:
-            // isMinifyEnabled = true
-            // isShrinkResources = true
+
+            if (hasSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
@@ -46,12 +68,8 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
-    kotlinOptions {
-        jvmTarget = "11"
-    }
-    buildFeatures {
-        compose = true
-    }
+    kotlinOptions { jvmTarget = "11" }
+    buildFeatures { compose = true }
 }
 
 dependencies {
@@ -70,39 +88,32 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended:<compose_version>")
     implementation("com.google.android.libraries.places:places:3.5.0")
     implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.ui:ui-text")   // ⬅️ REQUIRED for KeyboardOptions / ImeAction
+    implementation("androidx.compose.ui:ui-text")
     implementation("androidx.compose.material3:material3")
-    implementation(platform("androidx.compose:compose-bom:2024.04.01")) // Use the latest BoM version
-    implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.material3:material3") // Or androidx.compose.material:material
-    implementation("androidx.compose.foundation:foundation") // This includes KeyboardOptions
+    implementation(platform("androidx.compose:compose-bom:2024.04.01"))
+    implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.ui:ui-tooling-preview")
     debugImplementation("androidx.compose.ui:ui-tooling")
 
-    // ✅ Firebase BOM (pick one BOM version and keep it once; you currently have two below)
+    // ✅ Firebase
     implementation(platform("com.google.firebase:firebase-bom:32.7.1"))
-    implementation("io.coil-kt:coil-compose:2.6.0")
-
-    // ✅ Firebase Services
     implementation("com.google.firebase:firebase-auth-ktx")
     implementation("com.google.firebase:firebase-firestore-ktx")
     implementation("com.google.firebase:firebase-storage-ktx")
     implementation("com.google.firebase:firebase-analytics-ktx")
     implementation("com.google.firebase:firebase-crashlytics-ktx")
 
-    // ✅ Navigation for Compose
+    // ✅ Navigation & images
     implementation("androidx.navigation:navigation-compose:2.7.6")
+    implementation("io.coil-kt:coil-compose:2.6.0")
 
-    // ✅ Coil for Image Loading
-    implementation("io.coil-kt:coil-compose:2.4.0")
-
-    // Other Dependencies
+    // Other libs
     implementation("androidx.activity:activity-ktx:1.9.0")
     implementation("androidx.activity:activity-compose:1.9.0")
 
-    // (You have duplicates below; consider removing them to avoid confusion)
-    // implementation("com.google.firebase:firebase-firestore-ktx")
-    // implementation(platform("com.google.firebase:firebase-bom:33.0.0"))
+    // ✅ Ads / Places
+    implementation("com.google.android.gms:play-services-ads:23.4.0")
+    implementation("com.google.android.libraries.places:places:3.5.0")
 
     // ✅ Testing
     testImplementation(libs.junit)
@@ -112,6 +123,4 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
-
-    implementation("com.google.android.gms:play-services-ads:23.4.0")
 }
