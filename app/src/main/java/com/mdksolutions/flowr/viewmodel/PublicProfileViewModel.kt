@@ -23,7 +23,7 @@ data class PublicProfileUiState(
     val isSelf: Boolean = false,
     val isFollowing: Boolean = false,
     val isBusy: Boolean = false,
-    val work: BudtenderWork? = null        // ⬅️ NEW
+    val work: BudtenderWork? = null
 )
 
 class PublicProfileViewModel(
@@ -59,14 +59,29 @@ class PublicProfileViewModel(
                 val profileSnap = db.collection("users").document(targetUid).get().awaitk()
                 val profile = profileSnap.toObject(UserProfile::class.java)?.copy(uid = targetUid)
 
-                // 2) Load target's reviews → count + productIds
+                // 2) Load target's reviews
                 val reviewsSnap = db.collection("reviews")
                     .whereEqualTo("userId", targetUid)
                     .limit(300)
                     .get()
                     .awaitk()
-                val productIds = reviewsSnap.documents.mapNotNull { it.getString("productId") }.distinct()
-                val count = reviewsSnap.size()
+
+                // ---- Band-aid: ignore junk / legacy reviews ----
+                val validReviewDocs = reviewsSnap.documents.filter { doc ->
+                    val productId = doc.getString("productId")
+                    val userId = doc.getString("userId")
+                    val rating = doc.getDouble("rating")
+
+                    productId != null &&
+                            userId != null &&
+                            rating != null &&
+                            rating > 0.0
+                }
+
+                // Distinct productIds only from valid reviews
+                val productIds = validReviewDocs
+                    .mapNotNull { it.getString("productId") }
+                    .distinct()
 
                 // 3) Fetch reviewed products (whereIn chunks of 10)
                 val products = mutableListOf<Product>()
@@ -80,6 +95,9 @@ class PublicProfileViewModel(
                     }
                 }
 
+                // Count = number of valid review docs (matches "real" reviews)
+                val count = validReviewDocs.size
+
                 // 4) Follow state
                 val isSelf = (me == targetUid)
                 val followDoc = db.collection("users").document(me)
@@ -87,7 +105,7 @@ class PublicProfileViewModel(
                     .get().awaitk()
                 val isFollowing = followDoc.exists()
 
-                // 5) ⬅️ NEW: Budtender work doc
+                // 5) Budtender work doc
                 val workSnap = db.collection("users").document(targetUid)
                     .collection("work").document("info")
                     .get().awaitk()
@@ -103,7 +121,10 @@ class PublicProfileViewModel(
                     work = work
                 )
             } catch (e: Exception) {
-                _uiState.value = PublicProfileUiState(isLoading = false, error = e.message ?: "Failed to load profile")
+                _uiState.value = PublicProfileUiState(
+                    isLoading = false,
+                    error = e.message ?: "Failed to load profile"
+                )
             }
         }
     }
