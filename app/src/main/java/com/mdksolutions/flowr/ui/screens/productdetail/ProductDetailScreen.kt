@@ -31,6 +31,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.ui.graphics.Color
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -407,7 +408,7 @@ private fun MentionText(
     @Suppress("DEPRECATION")
     ClickableText(
         text = annotated,
-        style = MaterialTheme.typography.bodyMedium,
+        style = MaterialTheme.typography.bodyMedium.copy(color = Color.White),
         modifier = modifier
     ) { offset ->
         annotated.getStringAnnotations(tag = "MENTION", start = offset, end = offset)
