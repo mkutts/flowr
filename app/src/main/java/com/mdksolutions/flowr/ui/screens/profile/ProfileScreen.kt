@@ -26,7 +26,13 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(navController: NavController, viewModel: ProfileViewModel = viewModel()) {
+
     val ui by viewModel.uiState.collectAsState()
+
+    // 🔧 DEBUG LOG — helps confirm the correct count is reaching UI
+    LaunchedEffect(ui.reviewCount) {
+        android.util.Log.d("ProfileScreen", "ReviewCount from VM = ${ui.reviewCount}")
+    }
 
     val pickPhotoLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
@@ -34,7 +40,6 @@ fun ProfileScreen(navController: NavController, viewModel: ProfileViewModel = vi
         if (uri != null) viewModel.uploadProfilePhoto(uri)
     }
 
-    // NEW: snackbar host + scope
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
@@ -57,28 +62,45 @@ fun ProfileScreen(navController: NavController, viewModel: ProfileViewModel = vi
                 }
             )
         },
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) } // NEW
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { padding ->
+
         when {
-            ui.isLoading -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-            ui.error != null -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                Text(ui.error ?: "Error", color = MaterialTheme.colorScheme.error)
-            }
+            ui.isLoading ->
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(padding),
+                    contentAlignment = Alignment.Center
+                ) { CircularProgressIndicator() }
+
+            ui.error != null ->
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(padding),
+                    contentAlignment = Alignment.Center
+                ) { Text(ui.error ?: "Error", color = MaterialTheme.colorScheme.error) }
+
             else -> {
                 val p = ui.profile
                 if (p == null) {
-                    Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                        Text("Not signed in")
-                    }
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .padding(padding),
+                        contentAlignment = Alignment.Center
+                    ) { Text("Not signed in") }
                 } else {
                     ProfileContent(
                         displayName = p.displayName,
-                        username = p.username, // NEW
+                        username = p.username,
                         photoUrl = p.photoUrl,
                         role = p.role,
+
+                        // ✅ PATCH: always use ui.reviewCount (NEVER profile.reviewCount)
                         reviewCount = ui.reviewCount,
+
                         isUploading = ui.isUploading,
                         onChangePhoto = {
                             pickPhotoLauncher.launch(
@@ -87,14 +109,15 @@ fun ProfileScreen(navController: NavController, viewModel: ProfileViewModel = vi
                         },
                         onOpenReviews = { navController.navigate("my_reviews") },
                         onOpenFollowing = { navController.navigate("following") },
-                        onOpenWork = { navController.navigate("edit_work") }, // NEW
+                        onOpenWork = { navController.navigate("edit_work") },
                         onRename = { viewModel.updateDisplayName(it) },
                         onChangeUsername = { newU ->
                             viewModel.updateUsername(newU) { success, msg ->
-                                val feedback = msg ?: if (success) "Username updated!" else "Update failed."
+                                val feedback =
+                                    msg ?: if (success) "Username updated!" else "Update failed."
                                 scope.launch { snackbarHostState.showSnackbar(feedback) }
                             }
-                        }, // NEW
+                        },
                         modifier = Modifier.padding(padding)
                     )
                 }
@@ -106,23 +129,25 @@ fun ProfileScreen(navController: NavController, viewModel: ProfileViewModel = vi
 @Composable
 private fun ProfileContent(
     displayName: String,
-    username: String,                // NEW
+    username: String,
     photoUrl: String?,
     role: String,
+
+    // Already patched value
     reviewCount: Int,
+
     isUploading: Boolean,
     onChangePhoto: () -> Unit,
     onOpenReviews: () -> Unit,
     onOpenFollowing: () -> Unit,
-    onOpenWork: () -> Unit, // NEW
+    onOpenWork: () -> Unit,
     onRename: (String) -> Unit,
-    onChangeUsername: (String) -> Unit, // NEW
+    onChangeUsername: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var editing by remember { mutableStateOf(false) }
     var nameDraft by remember { mutableStateOf(displayName) }
 
-    // NEW: username edit dialog state
     var showUsernameDialog by remember { mutableStateOf(false) }
     var usernameDraft by remember { mutableStateOf(username) }
 
@@ -156,7 +181,6 @@ private fun ProfileContent(
                     text = displayName.ifBlank { "Unnamed" },
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold)
                 )
-                // NEW: show @username under the display name
                 Text(
                     text = "@" + username.ifBlank { "unknown" },
                     style = MaterialTheme.typography.bodyMedium
@@ -176,16 +200,20 @@ private fun ProfileContent(
         HorizontalDivider()
 
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+
+            // ⭐ GUARANTEED PATCHED LINE
             AssistChip(onClick = onOpenReviews, label = { Text("Reviews: $reviewCount") })
+
             AssistChip(onClick = onOpenFollowing, label = { Text("Following") })
+
             if (role.equals("budtender", ignoreCase = true)) {
-                AssistChip(onClick = onOpenWork, label = { Text("Work schedule") }) // NEW
+                AssistChip(onClick = onOpenWork, label = { Text("Work schedule") })
             }
         }
 
         HorizontalDivider()
 
-        // ---- Display name edit block (unchanged) ----
+        // Display name edit section
         if (editing) {
             OutlinedTextField(
                 value = nameDraft,
@@ -199,15 +227,16 @@ private fun ProfileContent(
                     onRename(nameDraft.trim())
                     editing = false
                 }) { Text("Save") }
-                OutlinedButton(onClick = { editing = false; nameDraft = displayName }) {
-                    Text("Cancel")
-                }
+                OutlinedButton(onClick = {
+                    editing = false
+                    nameDraft = displayName
+                }) { Text("Cancel") }
             }
         } else {
             OutlinedButton(onClick = { editing = true }) { Text("Edit Profile") }
         }
 
-        // ---- NEW: Username section with Change action ----
+        // Username block
         Text("Username", style = MaterialTheme.typography.labelLarge)
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -224,7 +253,6 @@ private fun ProfileContent(
             }) { Text("Change") }
         }
 
-        // ---- NEW: Change Username dialog ----
         if (showUsernameDialog) {
             AlertDialog(
                 onDismissRequest = { showUsernameDialog = false },
@@ -234,8 +262,8 @@ private fun ProfileContent(
                         OutlinedTextField(
                             value = usernameDraft,
                             onValueChange = {
-                                // allow letters, digits, underscore, dot
-                                val filtered = it.filter { ch -> ch.isLetterOrDigit() || ch == '_' || ch == '.' }
+                                val filtered =
+                                    it.filter { ch -> ch.isLetterOrDigit() || ch == '_' || ch == '.' }
                                 usernameDraft = filtered
                             },
                             label = { Text("New username") },
@@ -252,11 +280,10 @@ private fun ProfileContent(
                 confirmButton = {
                     TextButton(onClick = {
                         val u = usernameDraft.trim()
-                        // quick client-side guardrails
                         if (u.length < 3 || u.length > 24 || u.startsWith(".") || u.endsWith(".")) {
                             return@TextButton
                         }
-                        onChangeUsername(u) // triggers snackbar in parent
+                        onChangeUsername(u)
                         showUsernameDialog = false
                     }) { Text("Save") }
                 },

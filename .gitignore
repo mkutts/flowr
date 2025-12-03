@@ -43,3 +43,5 @@ fastlane/screenshots
 # --- Google services ---
 # If you prefer to keep google-services.json private, uncomment the next line.
 # app/google-services.json
+
+flowr-upload.jks

@@ -124,12 +124,33 @@ class ProfileViewModel : ViewModel() {
                     seeded
                 }
 
-                // Count this user's reviews
-                val qs = db.collection("reviews")
+                // 🔧 Count this user's *valid* reviews only (band-aid for legacy junk)
+                val reviewsSnap = db.collection("reviews")
                     .whereEqualTo("userId", uid)
+                    .limit(300)
                     .get()
                     .awaitk()
-                val count = qs.size()
+
+                val validReviewDocs = reviewsSnap.documents.filter { doc ->
+                    val productId = doc.getString("productId")
+                    val userIdField = doc.getString("userId")
+
+                    // rating may be stored as Double or Long
+                    val ratingNum: Double? = when {
+                        doc.getDouble("rating") != null -> doc.getDouble("rating")
+                        doc.getLong("rating") != null -> doc.getLong("rating")?.toDouble()
+                        else -> null
+                    }
+
+                    productId != null &&
+                            userIdField != null &&
+                            ratingNum != null &&
+                            ratingNum > 0.0
+                }
+
+                val count = validReviewDocs.size
+
+                Log.d("ProfileVM", "refresh(): valid review count for $uid = $count")
 
                 _uiState.value = ProfileUiState(
                     isLoading = false,

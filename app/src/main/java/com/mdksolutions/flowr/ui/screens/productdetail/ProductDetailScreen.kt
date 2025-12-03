@@ -31,6 +31,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.ui.graphics.Color
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -149,10 +150,16 @@ fun ProductDetailScreen(navController: NavController, productId: String?) {
                     Text("Reviews", style = MaterialTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    when {
-                        uiState.isLoadingReviews -> CircularProgressIndicator()
-                        uiState.reviews.isEmpty() -> Text("No reviews yet. Be the first!")
-                        else -> {
+                    // 🔧 NEW: always show how many reviews are in uiState
+                    Text(text = "Reviews (${uiState.reviews.size})")
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    if (uiState.isLoadingReviews) {
+                        CircularProgressIndicator()
+                    } else {
+                        if (uiState.reviews.isEmpty()) {
+                            Text("No reviews yet. Be the first!")
+                        } else {
                             LazyColumn {
                                 items(uiState.reviews) { review ->
                                     val isEditing = uiState.editingReviewId == review.id
@@ -176,7 +183,16 @@ fun ProductDetailScreen(navController: NavController, productId: String?) {
                                             valueRange = 1f..5f,
                                             steps = 3
                                         )
-                                        Text(text = "Rating: ${"%.1f".format(uiState.editedRating.coerceIn(1f, 5f))}")
+                                        Text(
+                                            text = "Rating: ${
+                                                "%.1f".format(
+                                                    uiState.editedRating.coerceIn(
+                                                        1f,
+                                                        5f
+                                                    )
+                                                )
+                                            }"
+                                        )
 
                                         Spacer(Modifier.height(8.dp))
 
@@ -244,7 +260,12 @@ fun ProductDetailScreen(navController: NavController, productId: String?) {
                                                                 viewModel.deleteReview(review.id)
                                                                 confirmDelete = false
                                                             }
-                                                        ) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                                                        ) {
+                                                            Text(
+                                                                "Delete",
+                                                                color = MaterialTheme.colorScheme.error
+                                                            )
+                                                        }
                                                     },
                                                     dismissButton = {
                                                         TextButton(onClick = { confirmDelete = false }) {
@@ -387,7 +408,7 @@ private fun MentionText(
     @Suppress("DEPRECATION")
     ClickableText(
         text = annotated,
-        style = MaterialTheme.typography.bodyMedium,
+        style = MaterialTheme.typography.bodyMedium.copy(color = Color.White),
         modifier = modifier
     ) { offset ->
         annotated.getStringAnnotations(tag = "MENTION", start = offset, end = offset)
