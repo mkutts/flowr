@@ -25,6 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -327,7 +328,7 @@ private fun UserSearchBar(navController: NavController) {
                 snap.documents.mapNotNull { d ->
                     val uid = d.id
                     val name = (d.get("displayName") as? String)?.ifBlank { null } ?: return@mapNotNull null
-                    val handle = (d.get("username") as? String)?.ifBlank { null }   // ← changed
+                    val handle = (d.get("username") as? String)?.ifBlank { null }
                     val photo = (d.get("photoUrl") as? String)?.ifBlank { null }
                     UserHit(uid, name, handle, photo)
                 }
@@ -347,7 +348,7 @@ private fun UserSearchBar(navController: NavController) {
                 snap.documents.mapNotNull { d ->
                     val uid = d.id
                     val name = (d.get("displayName") as? String)?.ifBlank { null } ?: return@mapNotNull null
-                    val handle = (d.get("username") as? String)?.ifBlank { null }   // ← changed
+                    val handle = (d.get("username") as? String)?.ifBlank { null }
                     val photo = (d.get("photoUrl") as? String)?.ifBlank { null }
                     UserHit(uid, name, handle, photo)
                 }.filter { hit ->
@@ -360,7 +361,7 @@ private fun UserSearchBar(navController: NavController) {
         // name search unchanged
         val nameHits = tryFetchBy("displayName_lc", "displayName", qLower)
         // handle → username search (uses existing usernameLower field)
-        val handleHits = tryFetchBy("usernameLower", "username", handleLower)   // ← changed
+        val handleHits = tryFetchBy("usernameLower", "username", handleLower)
 
         results = (nameHits + handleHits)
             .distinctBy { it.uid }
@@ -386,7 +387,7 @@ private fun UserSearchBar(navController: NavController) {
                 },
                 expanded = active,
                 onExpandedChange = { isActive -> active = isActive },
-                placeholder = { Text("Search users by name or @username") }, // ← changed
+                placeholder = { Text("Search users by name or @username") },
                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                 trailingIcon = {
                     if (query.isNotEmpty()) {
@@ -505,9 +506,18 @@ fun HomeScreen(
         }
 
     ) { padding ->
+        // shrink bottom padding so content sits closer to the bottom nav
+        val layoutDirection = LocalLayoutDirection.current
+        val adjustedPadding = PaddingValues(
+            start = padding.calculateStartPadding(layoutDirection),
+            top = padding.calculateTopPadding(),
+            end = padding.calculateEndPadding(layoutDirection),
+            bottom = 8.dp
+        )
+
         Column(
             modifier = Modifier
-                .padding(padding)
+                .padding(adjustedPadding)
                 .fillMaxSize()
         ) {
             // ── Collapsible Search & Filters ────────────────────────────────

@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.foundation.layout.WindowInsets
 
 data class BottomNavItem(
     val route: String,
@@ -30,7 +31,11 @@ fun FlowrBottomNav(navController: NavController, modifier: Modifier = Modifier) 
     val navBackStackEntry = navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry.value?.destination?.route
 
-    NavigationBar(modifier = modifier) {
+    // ⬇️ Remove system gesture insets so padding above/below icons is even
+    NavigationBar(
+        modifier = modifier,
+        windowInsets = WindowInsets(0, 0, 0, 0)
+    ) {
         items.forEach { item ->
             val selected = currentRoute == item.route
             NavigationBarItem(
@@ -44,7 +49,8 @@ fun FlowrBottomNav(navController: NavController, modifier: Modifier = Modifier) 
                     }
                 },
                 icon = { Icon(item.icon, contentDescription = item.label) },
-                label = { Text(item.label) }
+                label = { Text(item.label) },
+                alwaysShowLabel = true
             )
         }
     }

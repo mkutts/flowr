@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.*
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MenuAnchorType
@@ -236,7 +238,8 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp),
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),   // ⬅️ make page scrollable
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text("Add Your Review", style = MaterialTheme.typography.titleLarge)
@@ -246,12 +249,12 @@ fun AddReviewScreen(navController: NavController, productId: String?) {
             Text("Rating", style = MaterialTheme.typography.labelLarge)
             Spacer(Modifier.height(8.dp))
 
-                LeafRatingBar(
-                    rating = rating,
-                    onRatingChange = { rating = it },
-                    leafResId = R.drawable.cannabis_leaf,
-                    modifier = Modifier.padding(vertical = 4.dp)
-                )
+            LeafRatingBar(
+                rating = rating,
+                onRatingChange = { rating = it },
+                leafResId = R.drawable.cannabis_leaf,
+                modifier = Modifier.padding(vertical = 4.dp)
+            )
 
             Spacer(Modifier.height(4.dp))
             Text(

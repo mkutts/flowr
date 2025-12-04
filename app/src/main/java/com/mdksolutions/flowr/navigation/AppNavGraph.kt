@@ -30,6 +30,10 @@ import com.mdksolutions.flowr.ui.screens.auth.SignUpScreen
 import com.mdksolutions.flowr.ui.screens.support.SuggestionScreen
 // Bottom nav component
 import com.mdksolutions.flowr.ui.components.FlowrBottomNav
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.systemBars
 
 @Composable
 fun AppNavGraph(
@@ -40,9 +44,18 @@ fun AppNavGraph(
 
         // Track current route so we can show/hide the bottom bar
         val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
-        val bottomNavRoutes = setOf("home", "add_product", "profile", "suggest")
+        val bottomNavRoutes = setOf(
+            "home",
+            "add_product",
+            "profile",
+            "suggest",
+            "add_review/{productId}"      // ⬅️ show bottom nav on Add Review
+        )
 
         Scaffold(
+            // ✅ Keep only the top system inset; remove bottom inset so content + bottom nav
+            // can sit flush with the screen edge.
+            contentWindowInsets = WindowInsets.systemBars.only(WindowInsetsSides.Top),
             bottomBar = {
                 if (currentRoute in bottomNavRoutes) {
                     FlowrBottomNav(navController = navController)
