@@ -8,15 +8,13 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
-
-// Google test banner unit ID. Swap to your real ID for release builds.
-private const val TEST_BANNER_ID = "ca-app-pub-3940256099942544/6300978111"
+import com.mdksolutions.flowr.ads.AdUnits
 
 @Composable
 fun BannerAd(
     modifier: Modifier = Modifier,
-    adUnitId: String = TEST_BANNER_ID,
-    adSize: AdSize = AdSize.BANNER // keep simple for now; we can do adaptive next
+    adUnitId: String = AdUnits.banner,
+    adSize: AdSize = AdSize.BANNER
 ) {
     AndroidView(
         modifier = modifier,

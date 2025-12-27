@@ -25,9 +25,16 @@ android {
         applicationId = "com.mdksolutions.flowr"
         minSdk = 23
         targetSdk = 35
-        versionCode = 7
-        versionName = "1.0.6"
+        versionCode = 11
+        versionName = "1.0.10"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildFeatures {
+        // ✅ required for BuildConfig.DEBUG and your AdUnits logic
+        buildConfig = true
+        // ✅ Compose
+        compose = true
     }
 
     // 🔐 Signing config using gradle.properties/env
@@ -46,6 +53,7 @@ android {
         debug {
             manifestPlaceholders["firebase_crashlytics_collection_enabled"] = "false"
             manifestPlaceholders["firebase_analytics_collection_deactivated"] = "true"
+            manifestPlaceholders["admob_app_id"] = "ca-app-pub-3940256099942544~3347511713" // TEST
         }
         release {
             // ✅ Enable code shrinking/obfuscation for Play Store builds
@@ -57,6 +65,7 @@ android {
             )
             manifestPlaceholders["firebase_crashlytics_collection_enabled"] = "true"
             manifestPlaceholders["firebase_analytics_collection_deactivated"] = "false"
+            manifestPlaceholders["admob_app_id"] = "ca-app-pub-3774551279310155~4285760094" // REAL
 
             if (hasSigning) {
                 signingConfig = signingConfigs.getByName("release")
@@ -69,31 +78,28 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
     kotlinOptions { jvmTarget = "11" }
-    buildFeatures { compose = true }
 }
 
 dependencies {
+    // Core
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
+
+    // ✅ Compose (use ONE BOM: the libs one)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
-    implementation("androidx.compose.material3:material3:1.2.1")
+
+    // Material icons (BOM-managed)
+    implementation("androidx.compose.material:material-icons-extended")
+
+    // Android UI/support
     implementation("com.google.android.material:material:1.11.0")
     implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.4")
-    implementation("androidx.compose.material:material-icons-extended:<compose_version>")
-    implementation("com.google.android.libraries.places:places:3.5.0")
-    implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.ui:ui-text")
-    implementation("androidx.compose.material3:material3")
-    implementation(platform("androidx.compose:compose-bom:2024.04.01"))
-    implementation("androidx.compose.foundation:foundation")
-    implementation("androidx.compose.ui:ui-tooling-preview")
-    debugImplementation("androidx.compose.ui:ui-tooling")
 
     // ✅ Firebase
     implementation(platform("com.google.firebase:firebase-bom:32.7.1"))
@@ -107,13 +113,13 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.7.6")
     implementation("io.coil-kt:coil-compose:2.6.0")
 
-    // Other libs
-    implementation("androidx.activity:activity-ktx:1.9.0")
-    implementation("androidx.activity:activity-compose:1.9.0")
-
     // ✅ Ads / Places
     implementation("com.google.android.gms:play-services-ads:23.4.0")
     implementation("com.google.android.libraries.places:places:3.5.0")
+
+    // ✅ Compose tooling (debug only)
+    debugImplementation("androidx.compose.ui:ui-tooling")
+    debugImplementation(libs.androidx.ui.test.manifest)
 
     // ✅ Testing
     testImplementation(libs.junit)
@@ -121,6 +127,4 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.ui.test.junit4)
-    debugImplementation(libs.androidx.ui.tooling)
-    debugImplementation(libs.androidx.ui.test.manifest)
 }

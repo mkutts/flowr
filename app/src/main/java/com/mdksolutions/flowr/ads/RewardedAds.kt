@@ -11,12 +11,9 @@ import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
 
 object RewardedAds {
 
-    // Google TEST rewarded ad unit. Swap to prod for release builds.
-    private const val TEST_REWARDED_ID = "ca-app-pub-3940256099942544/5224354917"
-
     private var rewardedAd: RewardedAd? = null
 
-    fun load(activity: Activity, adUnitId: String = TEST_REWARDED_ID) {
+    fun load(activity: Activity, adUnitId: String = AdUnits.rewarded) {
         val request = AdRequest.Builder().build()
         RewardedAd.load(
             activity,
@@ -35,34 +32,20 @@ object RewardedAds {
         )
     }
 
-    fun show(
-        activity: Activity,
-        onEarned: (reward: RewardItem) -> Unit = {}
-    ) {
-        val ad = rewardedAd ?: run {
-            // try to load and bail; user can tap again in a moment
-            load(activity)
-            return
-        }
+    fun show(activity: Activity, onEarned: (reward: RewardItem) -> Unit = {}) {
+        val ad = rewardedAd ?: run { load(activity); return }
 
         ad.fullScreenContentCallback = object : FullScreenContentCallback() {
-            override fun onAdShowedFullScreenContent() {
-                Log.d("RewardedAds", "Shown")
-            }
             override fun onAdDismissedFullScreenContent() {
-                Log.d("RewardedAds", "Dismissed; reloading")
                 rewardedAd = null
-                load(activity) // prepare the next one
+                load(activity)
             }
             override fun onAdFailedToShowFullScreenContent(adError: AdError) {
-                Log.w("RewardedAds", "Failed to show: ${adError.message}")
                 rewardedAd = null
                 load(activity)
             }
         }
 
-        ad.show(activity) { rewardItem ->
-            onEarned(rewardItem)
-        }
+        ad.show(activity) { rewardItem -> onEarned(rewardItem) }
     }
 }
